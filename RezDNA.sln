@@ -1,0 +1,55 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RezDNA.API", "backend\RezDNA.API\RezDNA.API.csproj", "{7F4C3A2B-8E5D-4F3A-9B2C-1E4A6D8F9E3B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RezDNA.Models", "backend\RezDNA.Models\RezDNA.Models.csproj", "{2A5B8C9D-4E6F-7A2B-8C5D-9E4F3A6B7C8D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RezDNA.Data", "backend\RezDNA.Data\RezDNA.Data.csproj", "{3B6C7D8E-5F9A-8B3C-9D6E-4A7B8C9D5E6F}"
+EndProject
+Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "RezDNA.Web", "frontend\", "{4C7D8E9F-6A0B-9C4D-0E7F-5B8C9D0E6F7A}"
+	ProjectSection(WebsiteProperties) = preProject
+		TargetFrameworkMoniker = ".NETFramework,Version%3Dv4.0"
+		Debug.AspNetCompiler.VirtualPath = "/localhost_49385"
+		Debug.AspNetCompiler.PhysicalPath = "frontend\"
+		Debug.AspNetCompiler.TargetPath = "PrecompiledWeb\localhost_49385\"
+		Debug.AspNetCompiler.Updateable = "true"
+		Debug.AspNetCompiler.ForceOverwrite = "true"
+		Debug.AspNetCompiler.FixedNames = "false"
+		Debug.AspNetCompiler.Debug = "True"
+		Release.AspNetCompiler.VirtualPath = "/localhost_49385"
+		Release.AspNetCompiler.PhysicalPath = "frontend\"
+		Release.AspNetCompiler.TargetPath = "PrecompiledWeb\localhost_49385\"
+		Release.AspNetCompiler.Updateable = "true"
+		Release.AspNetCompiler.ForceOverwrite = "true"
+		Release.AspNetCompiler.FixedNames = "false"
+		Release.AspNetCompiler.Debug = "False"
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7F4C3A2B-8E5D-4F3A-9B2C-1E4A6D8F9E3B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F4C3A2B-8E5D-4F3A-9B2C-1E4A6D8F9E3B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F4C3A2B-8E5D-4F3A-9B2C-1E4A6D8F9E3B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F4C3A2B-8E5D-4F3A-9B2C-1E4A6D8F9E3B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A5B8C9D-4E6F-7A2B-8C5D-9E4F3A6B7C8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A5B8C9D-4E6F-7A2B-8C5D-9E4F3A6B7C8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A5B8C9D-4E6F-7A2B-8C5D-9E4F3A6B7C8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A5B8C9D-4E6F-7A2B-8C5D-9E4F3A6B7C8D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3B6C7D8E-5F9A-8B3C-9D6E-4A7B8C9D5E6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3B6C7D8E-5F9A-8B3C-9D6E-4A7B8C9D5E6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3B6C7D8E-5F9A-8B3C-9D6E-4A7B8C9D5E6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3B6C7D8E-5F9A-8B3C-9D6E-4A7B8C9D5E6F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D}
+	EndGlobalSection
+EndGlobal

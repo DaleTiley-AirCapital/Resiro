@@ -1,0 +1,2 @@
+id,jurisdiction,source_code,edition,section_ref,scope,summary_paraphrase,maintenance_cadence_months,triggers,required_evidence,trust_level,requires_uploaded_standard
+ROOF-WATERTIGHT,ZA,SANS 10400-L,*,*,Roof,"Roof watertightness advisory.",12,["handover"],[{"kind":"Inspection Report"}],advisory,false

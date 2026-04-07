@@ -1,0 +1,244 @@
+Replit Build Mandate — Property DNA (Flask API + React)
+0) Guardrails (non-negotiable)
+
+Multi-tenant from day 1: every entity table has org_id.
+
+Row-Level Security (RLS) enforced in Postgres.
+
+All uploads are signed S3 (Cloudflare R2) PUTs; we store sha256, bytes, contentType, provenance.
+
+Audit everything (append-only log). No secrets in code.
+
+1) Monorepo consolidation (from the three zips)
+
+Create structure:
+
+/apps
+  /marketing   # from React-Marketing-Site
+  /web         # from React-App (the product UI)
+  /api         # Flask backend (Railway)
+/packages
+  /db          # migrations (Alembic) + SQL (RLS policies)
+  /utils       # shared: DNA ID, S3 client, billing calc
+/infra
+  pricing.yaml    # owner cost x2, supplier plans
+  policies.sql    # RLS policies
+  seed.sql        # demo org + demo property
+.env.example
+
+
+Keep each app’s existing package.json/requirements, but unify scripts.
+
+2) Backend (Flask) — must deliver these endpoints
+
+Add to /apps/api:
+
+Models (SQLAlchemy) — new / extend
+Org, User, Property, Document, Policy, PolicyFinding, MaintenanceItem, Reminder, Vendor, VendorPropertyLink, AuditLog, BillingLedger, UsageCounters
+All have org_id. Document has: kind, storage_key, sha256, bytes, content_type, source{owner_upload,supplier_verified,developer_pack}, uploaded_by, verified_by, issued_at, expires_at.
+
+Routes
+
+POST /api/properties — create property + DNA ID.
+
+POST /api/documents/sign — returns R2 signed PUT URL.
+
+POST /api/policies — register policy (storage_key).
+
+POST /api/policies/<id>/analyze — stub: OCR → embed → write policy_findings.
+
+POST /api/maintenance/bootstrap — seeds from standards pack.
+
+POST /api/vendors/invite — create scoped upload token; restrict allowed_kinds.
+
+GET /api/reports/insurance-pack — notarized export (PDF/A), include hashes/provenance.
+
+Implementation details
+
+Add boto3 for S3/R2; hashlib for SHA-256; PyJWT for auth; Alembic for migrations; pgvector extension for embeddings.
+
+Add nightly cron (Railway) /internal/cron/billing:
+
+Pull R2 usage (GB-month proxy: bucket size snapshot).
+
+Compute owner charge = (R2_cost × FX) × markup; apply annual floor (R50).
+
+Bill suppliers (membership + overage). Write billing_ledger.
+
+Add audit decorator to log every mutating route.
+
+Env (in .env.example)
+
+DATABASE_URL=postgresql://...
+JWT_SECRET=...
+S3_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=property-dna-prod
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+OPENAI_API_KEY=...
+OCR_PROVIDER=tesseract
+SMTP_URL=smtp://...
+PAYMENT_PROVIDER=ozow|peach|yoco
+PAYMENT_API_KEY=...
+APP_URL=https://<vercel-web>
+API_URL=https://<railway-api>
+OWNER_MARKUP=2
+OWNER_ANNUAL_FLOOR_ZAR=50
+
+
+Code stubs to implement immediately (minimal)
+
+DNA generator (/packages/utils/dna.py):
+
+import base64, hashlib, datetime
+def base32_6(b: bytes) -> str:
+    return base64.b32encode(b)[:6].decode("ascii").rstrip("=")
+def make_dna_id(country, muni, parcel, unit, deed):
+    seed = f"{country}|{muni}|{parcel}|{unit or ''}|{deed or ''}".encode()
+    rnd = base32_6(hashlib.sha256(seed).digest())
+    year = datetime.date.today().year
+    parts = ["PDNA", country, muni, parcel] + ([unit] if unit else [])
+    return "-".join(parts + [str(year), rnd])
+
+
+S3/R2 signed PUT (/apps/api/src/routes/documents.py):
+
+import boto3, hashlib, time, os
+from flask import Blueprint, request, jsonify
+bp = Blueprint("documents", __name__)
+s3 = boto3.client("s3",
+    endpoint_url=os.environ["S3_ENDPOINT"],
+    aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"],
+    aws_secret_access_key=os.environ["S3_SECRET_ACCESS_KEY"],
+)
+BUCKET = os.environ["S3_BUCKET"]
+
+@bp.post("/api/documents/sign")
+def sign_upload():
+    j = request.get_json()
+    key = j["key"]               # e.g. f"{org_id}/{property_id}/{ts}-{filename}"
+    content_type = j["contentType"]
+    sha256 = j["sha256"]
+    bytes_len = int(j["bytes"])
+    # presigned PUT
+    url = s3.generate_presigned_url(
+        ClientMethod='put_object',
+        Params={"Bucket": BUCKET, "Key": key, "ContentType": content_type},
+        ExpiresIn=900, HttpMethod="PUT"
+    )
+    return jsonify({"url": url, "storageKey": key, "contentType": content_type, "sha256": sha256, "bytes": bytes_len})
+
+
+Audit helper (/apps/api/src/audit.py):
+
+from functools import wraps
+from flask import g
+from .models import AuditLog, db
+def audit(action, target_type):
+    def deco(f):
+        @wraps(f)
+        def inner(*args, **kwargs):
+            resp = f(*args, **kwargs)
+            db.session.add(AuditLog(org_id=g.org_id, actor_user_id=getattr(g,"user_id",None),
+                                    action=action, target_type=target_type,
+                                    target_id=kwargs.get("id"), payload={}))
+            db.session.commit()
+            return resp
+        return inner
+    return deco
+
+3) Database — migrations + RLS
+
+Add Alembic and create migrations for all new tables/columns.
+
+Enable pgcrypto and pgvector extensions.
+
+Apply /infra/policies.sql:
+
+ALTER TABLE <each> ENABLE ROW LEVEL SECURITY;
+
+RLS: users can SELECT/INSERT/UPDATE where org_id = current_setting('app.org_id')::uuid.
+
+API must set SET app.org_id = '<uuid>' per request (SQLAlchemy session hook).
+
+4) Frontend — wiring (Vite React stays)
+
+/apps/marketing: leave as-is; ensure CTAs route to /app.
+
+/apps/web: implement flows:
+
+Dashboard: show Dummy Property (read-only) + “Add My Property.”
+
+Vault: upload via /api/documents/sign → PUT to R2 → POST metadata → show provenance, size, expiry.
+
+Policy Gap Map: render policy_findings by tabs (Evidence/Exclusions/Maintenance/Endorsements).
+
+Vendors: invite flow; supplier upload lands as supplier_verified pending owner approval.
+
+Web env (/apps/web/.env.example)
+
+VITE_API_URL=https://<railway-api>
+
+5) Pricing & metering
+
+Add /infra/pricing.yaml:
+
+owner:
+  markup: 2.0
+  annual_floor_zar: 50
+supplier:
+  plans:
+    standard: { price_zar: 149, included_uploads: 50 }
+    pro:      { price_zar: 299, included_uploads: 200 }
+  overage_per_upload_zar: 6
+portfolio:
+  per_property_zar: 15
+  waive_if_verified_ratio_ge: 0.9
+
+
+Nightly job computes owner storage at cost×2 (R2 cost × USDZAR), posts supplier membership + overage to billing_ledger.
+
+6) DevOps — Railway / Vercel / R2
+
+Railway: Postgres + Flask app (gunicorn), cron for billing endpoint.
+
+Vercel: deploy marketing + web; set VITE_API_URL.
+
+R2: bucket property-dna-prod, scoped key with PUT/GET for that bucket only, lifecycle rules ON, versioning ON.
+
+Secrets: all via env vars. No tokens in repo.
+
+7) Demo org & data
+
+Apply /infra/seed.sql to create:
+
+org: Demo, user: demo@… (read-only), one Dummy Property with sample documents & findings (static).
+
+8) Week-1 ticket stack (in order)
+
+Create monorepo structure; move code into /apps/marketing, /apps/web, /apps/api.
+
+Add Alembic; create core tables + columns; enable extensions.
+
+Implement policies.sql (RLS) + session SET app.org_id.
+
+Add S3/R2 client and /api/documents/sign.
+
+Implement DNA generator + POST /api/properties.
+
+Wire Vault upload in /apps/web using signed PUT; persist metadata.
+
+Seed Demo org/property; publish read-only dashboard.
+
+9) Week-2 ticket stack
+
+POST /api/policies + stub analysis (OCR + embeddings); persist policy_findings.
+
+Maintenance bootstrap + reminders (email).
+
+Vendor invite flow + supplier_verified pipeline.
+
+Billing cron + pricing.yaml parser + billing_ledger writes.
+
+Insurance-grade export (PDF/A) with hashes + provenance.
