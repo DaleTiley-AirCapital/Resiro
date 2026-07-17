@@ -1,0 +1,13 @@
+.git
+.gitignore
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/wwwroot
+.env
+.env.*
+!.env.example
+attached_assets/*.zip
+!attached_assets/React-App-master_1755526798973.zip
+!attached_assets/React-Marketing-Site-master_1755526798974.zip

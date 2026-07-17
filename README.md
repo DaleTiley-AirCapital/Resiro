@@ -94,6 +94,29 @@ npm run dev
 
 The application will be available at `http://localhost:5000`
 
+## Running Locally With Docker
+
+This repository includes a Docker Compose setup for PostgreSQL, the current .NET API, and the preserved Replit marketing frontend from `attached_assets/React-Marketing-Site-master_1755526798974.zip`.
+
+```bash
+docker compose up --build
+```
+
+Local URLs:
+
+- Frontend: `http://localhost:3000`
+- API Swagger: `http://localhost:5001/swagger/index.html`
+- API base URL: `http://localhost:5001`
+
+The frontend matches the original Replit marketing/webpage experience. The Postgres database is available to the API inside Docker as `db:5432` and is not exposed on the host, which avoids conflicts with any local Postgres installation. Data is stored in the `postgres-data` Docker volume.
+
+For a clean database reset:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ## Project Structure
 
 ```

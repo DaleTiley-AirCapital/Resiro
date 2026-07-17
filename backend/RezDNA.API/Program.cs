@@ -64,6 +64,17 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+var ensureDatabaseCreated =
+    builder.Configuration.GetValue<bool>("Database:EnsureCreated") ||
+    string.Equals(Environment.GetEnvironmentVariable("DATABASE__ENSURE_CREATED"), "true", StringComparison.OrdinalIgnoreCase);
+
+if (ensureDatabaseCreated)
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<RezDNADbContext>();
+    dbContext.Database.EnsureCreated();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -76,11 +87,21 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Serve static files from frontend
-app.UseStaticFiles();
+var webRootPath = app.Environment.WebRootPath;
+if (!string.IsNullOrWhiteSpace(webRootPath) && Directory.Exists(webRootPath))
+{
+    app.UseStaticFiles();
+}
+
 app.UseRouting();
 
-// Fallback to serve React app
-app.MapFallbackToFile("index.html");
+var indexPath = !string.IsNullOrWhiteSpace(webRootPath)
+    ? Path.Combine(webRootPath, "index.html")
+    : string.Empty;
+
+if (File.Exists(indexPath))
+{
+    app.MapFallbackToFile("index.html");
+}
 
 app.Run();
