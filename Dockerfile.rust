@@ -10,7 +10,7 @@ FROM rust:1.90-bookworm AS build
 WORKDIR /src
 ENV CARGO_BUILD_JOBS=2
 COPY rust/ .
-RUN --mount=type=cache,id=resiro-registry,target=/usr/local/cargo/registry --mount=type=cache,id=resiro-target,target=/src/target cargo test --release && cargo build --release && cp target/release/resiro /src/resiro
+RUN --mount=type=cache,id=s/0f0b3886-3a69-405d-9458-b0e266aa399a-/usr/local/cargo/registry,target=/usr/local/cargo/registry --mount=type=cache,id=s/0f0b3886-3a69-405d-9458-b0e266aa399a-/src/target,target=/src/target cargo test --release && cargo build --release && cp target/release/resiro /src/resiro
 
 FROM debian:bookworm-slim
 RUN apt-get update -qq && apt-get install -y --no-install-recommends ca-certificates poppler-utils tesseract-ocr tesseract-ocr-afr && rm -rf /var/lib/apt/lists/*
