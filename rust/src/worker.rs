@@ -162,6 +162,7 @@ async fn process_document(app:&App,doc:&Value)->Result<()>{
    .bind(Uuid::new_v4()).bind(pid).bind(id).bind(org).bind(key).bind(fact.get("value").cloned().unwrap_or(Value::Null)).bind(quote)
    .bind(fact["page"].as_i64().unwrap_or(1) as i32).bind(confidence).execute(&mut *tx).await?;
  }
+ sqlx::query("DELETE FROM resiro.assets WHERE document_id=$1 AND review_status='candidate'").bind(id).execute(&mut *tx).await?;
  for asset in analysis["assets"].as_array().into_iter().flatten(){
   let name=asset["name"].as_str().unwrap_or("Unidentified item");
   if name.trim().is_empty(){continue;}
