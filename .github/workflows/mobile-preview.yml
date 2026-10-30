@@ -1,0 +1,88 @@
+name: Mobile preview builds
+on:
+  push:
+    branches: [codex/rust-property-platform]
+    paths: ['mobile/**', '.github/workflows/mobile-preview.yml', 'rust/public/app.css']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mobile-preview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mobile
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Android build tools
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
+      - name: Install verified Dioxus CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dx"
+          gh release download v0.7.0 --repo DioxusLabs/dioxus --pattern dx-x86_64-unknown-linux-gnu.tar.gz --pattern dx-x86_64-unknown-linux-gnu.sha256 --dir "$RUNNER_TEMP/dx"
+          cd "$RUNNER_TEMP/dx"
+          grep 'tar.gz$' dx-x86_64-unknown-linux-gnu.sha256 | sha256sum -c -
+          tar xzf dx-x86_64-unknown-linux-gnu.tar.gz
+          echo "$RUNNER_TEMP/dx" >> "$GITHUB_PATH"
+      - name: Build installable Android preview
+        working-directory: mobile
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          dx build --platform android --target aarch64-linux-android
+      - name: Preserve Android preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resiro-android-preview
+          path: |
+            mobile/target/dx/**/*.apk
+            mobile/target/dx/**/*.aab
+          if-no-files-found: warn
+  ios:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          targets: aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mobile
+      - name: Install verified Dioxus CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dx"
+          ARCH="$(uname -m)"
+          if [ "$ARCH" = arm64 ]; then TRIPLE=aarch64-apple-darwin; else TRIPLE=x86_64-apple-darwin; fi
+          gh release download v0.7.0 --repo DioxusLabs/dioxus --pattern "dx-$TRIPLE.tar.gz" --pattern "dx-$TRIPLE.sha256" --dir "$RUNNER_TEMP/dx"
+          cd "$RUNNER_TEMP/dx"
+          grep 'tar.gz$' "dx-$TRIPLE.sha256" | shasum -a 256 -c -
+          tar xzf "dx-$TRIPLE.tar.gz"
+          echo "$RUNNER_TEMP/dx" >> "$GITHUB_PATH"
+      - name: Build iOS simulator preview
+        working-directory: mobile
+        run: dx build --platform ios --target aarch64-apple-ios-sim
+      - name: Preserve simulator application
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resiro-ios-simulator-preview
+          path: mobile/target/dx/**/Resiro.app
+          if-no-files-found: warn
