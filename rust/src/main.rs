@@ -85,6 +85,8 @@ async fn main()->anyhow::Result<()>{
   .route("/documents/{id}",get(pages::document_page).post(documents::edit_form))
   .route("/documents/{id}/download",get(documents::download))
   .route("/documents/{id}/retry",post(documents::retry))
+  .route("/documents/{id}/unlock",post(documents::unlock_form))
+  .route("/api/documents/{id}/unlock",post(documents::unlock_json).layer(DefaultBodyLimit::max(8192)))
   .route("/facts/{id}/review",post(documents::review_fact))
   .route("/properties/{id}/assets",post(pages::save_asset))
   .merge(workflows::routes())

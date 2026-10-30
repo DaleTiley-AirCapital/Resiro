@@ -175,3 +175,5 @@ pub async fn text_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uui
  .bind(id).bind(user.org_id).fetch_optional(&app.db).await?;
  Ok(Json(row.ok_or_else(missing)?))
 }
+
+include!("document_unlock.rs");

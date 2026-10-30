@@ -8,8 +8,11 @@ pub fn e(s:&str)->String{s.replace('&',"&amp;").replace('<',"&lt;").replace('>',
 pub fn v(data:&Value,key:&str)->String{match &data[key]{Value::String(s)=>s.clone(),Value::Null=>String::new(),other=>other.to_string()}}
 pub fn enc(s:&str)->String{url::form_urlencoded::byte_serialize(s.as_bytes()).collect()}
 pub fn csrf(user:&auth::User)->String{format!("<input type=hidden name=csrf value=\"{}\">",e(&user.csrf))}
-pub fn input(name:&str,label:&str,value:&str,kind:&str)->String{format!("<label>{}<input name=\"{}\" type=\"{}\" value=\"{}\"></label>",e(label),e(name),e(kind),e(value))}
-pub fn badge(value:&str)->String{format!("<span class=\"badge {}\">{}</span>",if ["failed","rejected"].contains(&value){"warn"}else{""},e(value))}
+pub fn input(name:&str,label:&str,value:&str,kind:&str)->String{
+ let extra=if kind=="number"{" min=0 step=any"}else if kind=="email"{" autocomplete=username"}else if name=="token"{" autocomplete=one-time-code"}else if kind=="password"&&label.to_lowercase().contains("new"){" autocomplete=new-password"}else if kind=="password"{" autocomplete=current-password"}else{""};
+ format!("<label>{}<input name=\"{}\" type=\"{}\" value=\"{}\"{extra}></label>",e(label),e(name),e(kind),e(value))
+}
+pub fn badge(value:&str)->String{format!("<span class=\"badge {}\">{}</span>",if ["failed","rejected","locked"].contains(&value){"warn"}else{""},e(value))}
 pub fn layout(user:Option<&auth::User>,title:&str,body:String)->Html<String>{
  let menu=if let Some(user)=user{format!("<a href=/app>Properties</a>{}<span class=muted>{}</span><form method=post action=/logout>{}<button class=quiet>Sign out</button></form>",if user.role=="supplier"{"<a href=/supplier>Supplier console</a>"}else{""},e(&user.email),csrf(user))}else{"<a href=/>Public website</a><a href=/login>Sign in</a>".into()};
  Html(format!("<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>{} · Resiro</title><link rel=stylesheet href=/public/app.css></head><body><header class=top><a class=brand href=/app><img src=/public/logo.png alt=Resiro></a><nav>{}</nav></header><main>{}</main><footer>Resiro · Your property’s digital record</footer></body></html>",e(title),menu,body))

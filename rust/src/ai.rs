@@ -77,7 +77,7 @@ pub async fn answer(app:&App,user:&auth::User,pid:Uuid,question:&str)->Result<Va
   }}
  }
  docs.truncate(20);
- let progress:Value=sqlx::query_scalar("SELECT jsonb_build_object('total',count(*),'processed',count(*) FILTER(WHERE status IN ('processed','needs_review')),'pending',count(*) FILTER(WHERE status IN ('queued','reading','analyzing','ai_pending')),'failed',count(*) FILTER(WHERE status='failed')) FROM resiro.documents WHERE property_id=$1 AND org_id=$2")
+ let progress:Value=sqlx::query_scalar("SELECT jsonb_build_object('total',count(*),'processed',count(*) FILTER(WHERE status IN ('processed','needs_review')),'pending',count(*) FILTER(WHERE status IN ('queued','reading','analyzing','ai_pending')),'failed',count(*) FILTER(WHERE status IN ('failed','locked'))) FROM resiro.documents WHERE property_id=$1 AND org_id=$2")
   .bind(pid).bind(user.org_id).fetch_one(&app.db).await?;
  let inventory:Vec<Value>=sqlx::query_scalar("SELECT jsonb_build_object('id',id,'name',name,'category',category,'status',status,'summary',extraction->'analysis'->>'summary') FROM resiro.documents WHERE property_id=$1 AND org_id=$2 ORDER BY category,name")
   .bind(pid).bind(user.org_id).fetch_all(&app.db).await?;

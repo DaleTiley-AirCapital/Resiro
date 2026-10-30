@@ -6,7 +6,7 @@ pub async fn property_page(State(app):State<App>,headers:HeaderMap,Path(id):Path
  let facts:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(f)||jsonb_build_object('source_name',d.name) FROM resiro.facts f JOIN resiro.documents d ON d.id=f.document_id WHERE f.property_id=$1 AND f.org_id=$2 AND f.review_status<>'rejected' ORDER BY CASE WHEN fact_key LIKE 'property.%' THEN 0 ELSE 1 END,fact_key,f.created_at DESC LIMIT 2000")
   .bind(id).bind(user.org_id).fetch_all(&app.db).await?;
  let fact_count:i64=sqlx::query_scalar("SELECT count(*) FROM resiro.facts WHERE property_id=$1 AND org_id=$2 AND review_status<>'rejected'").bind(id).bind(user.org_id).fetch_one(&app.db).await?;
- let total=docs.len();let processed=docs.iter().filter(|d|d["status"]=="processed"||d["status"]=="needs_review").count();
+ let total=docs.len();let processed=docs.iter().filter(|d|d["status"]=="processed"||d["status"]=="needs_review"||d["status"]=="unlocked").count();
  let queued=docs.iter().filter(|d|["queued","reading","analyzing","ai_pending"].contains(&d["status"].as_str().unwrap_or(""))).count();
  let mut navigation=String::new();
  for (key,label) in [("overview","Overview"),("documents","Documents"),("plans","Plans & certificates"),("finance","Finance"),("insurance","Insurance"),("maintenance","Maintenance"),("assets","Assets & contents"),("contacts","Contacts"),("timeline","Timeline"),("assistant","Ask your property")]{
@@ -27,7 +27,9 @@ pub async fn property_page(State(app):State<App>,headers:HeaderMap,Path(id):Path
  };
  let banner=format!("<section class=hero><div><div class=eyebrow>YOUR PRIVATE PROPERTY FILE</div><h1>{}</h1><p>{}</p></div>{}</section>",e(&v(&p,"name")),e(&v(&p,"address")),badge("Private"));
  let progress=if queued>0{format!("<p class=notice>{queued} documents are still being read. You can use this file now; facts and search results will expand as processing finishes. <a href=\"/properties/{id}?tab={}\">Refresh status</a></p>",enc(tab))}else{String::new()};
- let body=format!("{banner}{stats}{progress}<div class=workspace><aside>{navigation}</aside><section class=content>{content}</section></div>");
+ let blocked=docs.iter().filter(|d|["failed","locked"].contains(&v(d,"status").as_str())).count();
+ let attention=if blocked>0{format!("<p class=notice>{blocked} files need attention. Their originals are safe. Open Documents to unlock protected PDFs or inspect processing errors.</p>")}else{String::new()};
+ let body=format!("{banner}{stats}{progress}{attention}<div class=workspace><aside>{navigation}</aside><section class=content>{content}</section></div>");
  Ok(layout(Some(&user),&v(&p,"name"),body).into_response())
 }
 fn document_table(docs:&[Value])->String{

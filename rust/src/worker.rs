@@ -39,7 +39,10 @@ fn strip_xml(s:&str)->String{
 async fn tool(program:&str,args:&[String],seconds:u64)->anyhow::Result<String>{
  let mut command=tokio::process::Command::new(program);command.args(args).kill_on_drop(true);
  let result=tokio::time::timeout(std::time::Duration::from_secs(seconds),command.output()).await??;
- if !result.status.success(){anyhow::bail!("Document conversion tool failed");}
+ if !result.status.success(){
+  if String::from_utf8_lossy(&result.stderr).to_lowercase().contains("password"){anyhow::bail!("Password-protected PDF. Unlock it privately to allow analysis. Original preserved.");}
+  anyhow::bail!("Document conversion tool failed; the original is preserved");
+ }
  Ok(String::from_utf8_lossy(&result.stdout).into_owned())
 }
 pub struct Extracted{pub text:String,pub attachments:Vec<(String,Vec<u8>)>,pub method:String,pub limitations:Vec<String>}
@@ -118,7 +121,9 @@ async fn process_one(app:&App)->Result<bool>{
   Ok(())=>{},
   Err(e)=>{
    tracing::warn!(document_id=%id,error=%e,"Document processing failed");
-   sqlx::query("UPDATE resiro.documents SET status=CASE WHEN attempts<4 THEN 'queued' ELSE 'failed' END,error=$1,claimed_at=NULL,next_attempt_at=now()+make_interval(secs=>60*attempts) WHERE id=$2").bind(match &e{Error::Other(inner)=>inner.to_string(),Error::Message(_,message)=>message.clone(),Error::Database(_)=>"Database operation failed; contact support".to_owned()}.chars().take(500).collect::<String>()).bind(id).execute(&app.db).await?;
+   let reason=match &e{Error::Other(inner)=>inner.to_string(),Error::Message(_,message)=>message.clone(),Error::Database(_)=>"Database operation failed; contact support".to_owned()};
+   let locked=reason.contains("Password-protected");
+   sqlx::query("UPDATE resiro.documents SET status=CASE WHEN $3 THEN 'locked' WHEN attempts<4 THEN 'queued' ELSE 'failed' END,error=$1,claimed_at=NULL,next_attempt_at=now()+make_interval(secs=>60*attempts) WHERE id=$2").bind(reason.chars().take(500).collect::<String>()).bind(id).bind(locked).execute(&app.db).await?;
   }
  }Ok(true)
 }
