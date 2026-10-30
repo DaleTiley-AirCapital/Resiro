@@ -13,7 +13,7 @@ public class PublicSharesController : ControllerBase
     private async Task<(Guid org, JsonNode share, JsonNode job)?> Find(string token)
     {
         if (token.Length != 48 || token.Any(c => !Uri.IsHexDigit(c))) return null;
-        var candidates = await db.Organizations.Where(o => o.Settings.Contains(token)).ToListAsync();
+        var candidates = await db.Organizations.FromSqlInterpolated($"SELECT * FROM organizations WHERE strpos(settings::text, {token}) > 0").ToListAsync();
         foreach (var org in candidates)
         {
             var state = JsonNode.Parse(org.Settings)!;
