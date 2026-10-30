@@ -23,18 +23,11 @@ subprocess.run(["adb","shell","input","tap","60","260"],check=True)
 subprocess.run(["adb","shell","input","text","dale.tiley@email.com"],check=True)
 subprocess.run(["adb","shell","input","keyevent","61"],check=True)
 subprocess.run(["adb","shell","input","text","demo123"],check=True)
-subprocess.run(["adb","shell","input","keyevent","4"],check=True)
-time.sleep(1)
-filled=out/"Resiro-android-filled-login.png"
-filled.write_bytes(subprocess.check_output(["adb","exec-out","screencap","-p"]))
-tsv=subprocess.check_output(["tesseract",str(filled),"stdout","tsv"],text=True,stderr=subprocess.DEVNULL)
-words=list(csv.DictReader(io.StringIO(tsv),delimiter="\t"))
-buttons=[w for w in words if w["text"].strip().lower() in ("sign","signin")]
-assert buttons, "Sign-in button is not visible"
-button=max(buttons,key=lambda w:int(w["top"]))
-x=int(button["left"])+int(button["width"])//2
-y=int(button["top"])+int(button["height"])//2
-subprocess.run(["adb","shell","input","tap",str(x),str(y)],check=True)
+time.sleep(0.5)
+# Move from the password field to the sign-in button and activate it. This avoids
+# stale touch coordinates while the keyboard changes the WebView viewport.
+subprocess.run(["adb","shell","input","keyevent","61"],check=True)
+subprocess.run(["adb","shell","input","keyevent","66"],check=True)
 dashboard=False
 for attempt in range(12):
     time.sleep(3)
@@ -44,6 +37,7 @@ for attempt in range(12):
     if re.search(r"my\s+properties",words,re.I):
         dashboard=True
         break
+(out/"android-logcat.txt").write_text(subprocess.check_output(["adb","logcat","-d"],text=True,errors="replace"))
 assert dashboard, "Native owner dashboard did not load after demo sign-in"
 (out/"android-launch-check.json").write_text(json.dumps({"package":package,"activity":activity,"installed":True,"sign_in_screen_rendered":True,"dashboard_login_tested":True}))
 print("Android application installed, launched, signed in and loaded the owner dashboard.")
