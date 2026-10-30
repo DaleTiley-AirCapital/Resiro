@@ -51,13 +51,13 @@ jobs:
         working-directory: mobile
         run: |
           mkdir -p previews
-          APK="$(find target/dx -type f -name '*.apk' -print -quit)"
+          APK="$(find target/dx/resiro/debug/android -type f -name '*.apk' -print -quit)"
           test -n "$APK"
           cp "$APK" previews/Resiro-android-arm64.apk
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           dx build --android --target x86_64-linux-android
-          APK="$(find target/dx -type f -name '*.apk' -print -quit)"
+          APK="$(find target/dx/resiro/debug/android -type f -name '*.apk' -print -quit)"
           cp "$APK" previews/Resiro-android-emulator.apk
       - name: Enable Android emulator acceleration
         run: sudo chmod 666 /dev/kvm
@@ -78,6 +78,8 @@ jobs:
             mobile/previews/*.apk
             mobile/previews/*.png
             mobile/previews/*.json
+            mobile/previews/*.xml
+            mobile/previews/*.txt
           if-no-files-found: error
   ios:
     runs-on: macos-15
@@ -109,10 +111,10 @@ jobs:
       - name: Launch iOS simulator application
         working-directory: mobile
         run: |
-          APP="$(find target/dx -type d -name '*.app' -print -quit)"
+          APP="target/dx/resiro/debug/ios/Resiro.app"
           test -n "$APP"
           mkdir -p previews
-          tar -czf previews/Resiro-ios-simulator.tar.gz -C "$(dirname "$APP")" "$(basename "$APP")"
+          tar -chzf previews/Resiro-ios-simulator.tar.gz -C "$(dirname "$APP")" "$(basename "$APP")"
           SIM_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for values in d["devices"].values() for v in values if v["name"].startswith("iPhone")))')"
           xcrun simctl boot "$SIM_ID"
           xcrun simctl bootstatus "$SIM_ID" -b
