@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -10,7 +12,8 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -51,6 +54,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // CORS configuration
+builder.Services.AddAuthorization(options => options.AddPolicy("Supplier", policy => policy.RequireClaim("userType", "supplier")));
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -62,7 +67,21 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddHttpClient<AiAnalysisService>(client => client.Timeout = TimeSpan.FromSeconds(125));
+builder.Services.AddHostedService<ReminderWorker>();
+
 var app = builder.Build();
+
+var ensureDatabaseCreated =
+    builder.Configuration.GetValue<bool>("Database:EnsureCreated") ||
+    string.Equals(Environment.GetEnvironmentVariable("DATABASE__ENSURE_CREATED"), "true", StringComparison.OrdinalIgnoreCase);
+
+if (ensureDatabaseCreated)
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<RezDNADbContext>();
+    dbContext.Database.EnsureCreated();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -71,16 +90,29 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseRouting();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapMethods("/api/{**path}", new[] { "GET", "POST", "PUT", "PATCH", "DELETE" }, () => Results.NotFound(new { error = "API endpoint not found" }));
 
-// Serve static files from frontend
-app.UseStaticFiles();
-app.UseRouting();
+var webRootPath = app.Environment.WebRootPath;
+if (!string.IsNullOrWhiteSpace(webRootPath) && Directory.Exists(webRootPath))
+{
+    app.UseStaticFiles();
+}
 
-// Fallback to serve React app
-app.MapFallbackToFile("index.html");
+
+
+var indexPath = !string.IsNullOrWhiteSpace(webRootPath)
+    ? Path.Combine(webRootPath, "index.html")
+    : string.Empty;
+
+if (File.Exists(indexPath))
+{
+    app.MapGet("/", () => Results.File(indexPath, "text/html"));
+    app.MapFallbackToFile("application.html");
+}
 
 app.Run();
