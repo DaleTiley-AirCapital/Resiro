@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 mod api;
+mod workflows;
 use api::{Session,text};
 use dioxus::prelude::*;
 use serde_json::{Value,json};
@@ -10,7 +11,7 @@ fn App()->Element{
   document::Style { {include_str!("../../rust/public/app.css")} }
   document::Style { {include_str!("../mobile.css")} }
   if let Some(s)=session(){
-   Workspace { session:s,onlogout:move |_|session.set(None) }
+   if text(&s.user,"role")=="supplier"{workflows::SupplierWorkspace {session:s,onlogout:move |_|session.set(None)}}else{Workspace { session:s,onlogout:move |_|session.set(None) }}
   }else{ Login { onlogin:move |s|session.set(Some(s)) } }
  }
 }
@@ -106,7 +107,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
     }
    }
    if tab()=="Assets"{ Assets {session:session.clone(),property_id:text(&p,"id")} }
-   if tab()=="Activity"{ Activity {session:session.clone(),property_id:text(&p,"id")} }
+   if tab()=="Tasks"{ workflows::Maintenance {session:session.clone(),property_id:text(&p,"id")} Activity {session:session.clone(),property_id:text(&p,"id")} }
    if tab()=="Ask"{
     section {class:"card",h3 {"Ask about your home"}p {"Answers use your documents. Check the source when a value needs confirmation."}
      textarea {placeholder:"What bed did I buy, where, and how much did it cost?",value:"{question}",oninput:move|e|question.set(e.value())}
@@ -123,7 +124,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
      }}
     }}
    }
-   nav {class:"bottom-nav",for label in ["Home","Documents","Assets","Activity","Ask"]{
+   nav {class:"bottom-nav",for label in ["Home","Documents","Assets","Tasks","Ask"]{
     button {class:if tab()==label{"active"}else{""},onclick:move |_|{tab.set(label.to_string());document.set(None);},"{label}"}
    }}
   }else{
