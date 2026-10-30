@@ -60,7 +60,10 @@ jobs:
           APK="$(find target/dx/resiro/debug/android -type f -name '*.apk' -print -quit)"
           cp "$APK" previews/Resiro-android-emulator.apk
       - name: Enable Android emulator acceleration
-        run: sudo chmod 666 /dev/kvm
+        run: |
+          sudo chmod 666 /dev/kvm
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr
       - name: Launch Android application
         uses: reactivecircus/android-emulator-runner@v2
         with:

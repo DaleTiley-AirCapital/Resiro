@@ -1,3 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleDisplayName</key><string>Resiro</string><key>NSCameraUsageDescription</key><string>Photograph receipts, invoices and property records to add them to your private property file.</string><key>NSPhotoLibraryUsageDescription</key><string>Choose receipt and property photographs to upload to your private property file.</string></dict></plist>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>co.za.resiro.mobile</string>
+<key>CFBundleExecutable</key><string>resiro</string>
+<key>CFBundleName</key><string>Resiro</string>
+<key>CFBundleDisplayName</key><string>Resiro</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleShortVersionString</key><string>0.1.0</string>
+<key>LSRequiresIPhoneOS</key><true/>
+<key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+<key>UILaunchScreen</key><dict/>
+<key>NSCameraUsageDescription</key><string>Photograph receipts, invoices and property records to add them to your private property file.</string>
+<key>NSPhotoLibraryUsageDescription</key><string>Choose receipt and property photographs to upload to your private property file.</string>
+</dict></plist>
