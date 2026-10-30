@@ -47,15 +47,38 @@ jobs:
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           dx build --android --target aarch64-linux-android
+      - name: Prepare Android device checks
+        working-directory: mobile
+        run: |
+          mkdir -p previews
+          APK="$(find target/dx -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+          cp "$APK" previews/Resiro-android-arm64.apk
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          dx build --android --target x86_64-linux-android
+          APK="$(find target/dx -type f -name '*.apk' -print -quit)"
+          cp "$APK" previews/Resiro-android-emulator.apk
+      - name: Enable Android emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Launch Android application
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: python3 mobile/scripts/android_smoke.py mobile/previews/Resiro-android-emulator.apk
       - name: Preserve Android preview
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: resiro-android-preview
           path: |
-            mobile/target/dx/**/*.apk
-            mobile/target/dx/**/*.aab
-          if-no-files-found: warn
+            mobile/previews/*.apk
+            mobile/previews/*.png
+            mobile/previews/*.json
+          if-no-files-found: error
   ios:
     runs-on: macos-15
     timeout-minutes: 60
@@ -83,10 +106,25 @@ jobs:
       - name: Build iOS simulator preview
         working-directory: mobile
         run: dx build --ios --target aarch64-apple-ios-sim
+      - name: Launch iOS simulator application
+        working-directory: mobile
+        run: |
+          APP="$(find target/dx -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+          mkdir -p previews
+          tar -czf previews/Resiro-ios-simulator.tar.gz -C "$(dirname "$APP")" "$(basename "$APP")"
+          SIM_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for values in d["devices"].values() for v in values if v["name"].startswith("iPhone")))')"
+          xcrun simctl boot "$SIM_ID"
+          xcrun simctl bootstatus "$SIM_ID" -b
+          xcrun simctl install "$SIM_ID" "$APP"
+          BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          xcrun simctl launch "$SIM_ID" "$BUNDLE"
+          sleep 8
+          xcrun simctl io "$SIM_ID" screenshot previews/Resiro-ios-simulator.png
       - name: Preserve simulator application
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: resiro-ios-simulator-preview
-          path: mobile/target/dx/**/Resiro.app
-          if-no-files-found: warn
+          path: mobile/previews/*
+          if-no-files-found: error

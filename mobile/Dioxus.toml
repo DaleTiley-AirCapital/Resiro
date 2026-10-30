@@ -1,6 +1,8 @@
 [application]
-name = "Resiro"
+ios_info_plist = "Info.plist"
+android_min_sdk_version = 26
 
 [bundle]
 identifier = "co.za.resiro.mobile"
 publisher = "Resiro"
+short_description = "Your private property file, documents and home assistant."
