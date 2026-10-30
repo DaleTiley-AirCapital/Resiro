@@ -112,12 +112,18 @@ pub async fn run(app:App){
  }});}
 }
 async fn process_one(app:&App)->Result<bool>{
- sqlx::query("UPDATE resiro.documents SET status='queued',claimed_at=NULL WHERE status IN ('reading','analyzing') AND claimed_at<now()-interval '20 minutes'").execute(&app.db).await?;
+ sqlx::query("UPDATE resiro.documents SET status=CASE WHEN attempts<4 THEN 'queued' ELSE 'failed' END,claimed_at=NULL WHERE status IN ('reading','analyzing') AND claimed_at<now()-interval '3 minutes'").execute(&app.db).await?;
  let row:Option<Value>=sqlx::query_scalar("UPDATE resiro.documents AS claimed SET status='reading',attempts=attempts+1,claimed_at=now() WHERE id=(SELECT id FROM resiro.documents WHERE status='queued' AND attempts<4 AND next_attempt_at<=now() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING to_jsonb(claimed)")
   .fetch_optional(&app.db).await?;
  let Some(doc)=row else{return Ok(false)};
  let id=Uuid::parse_str(doc["id"].as_str().unwrap()).map_err(|e|anyhow::anyhow!(e))?;
- match process_document(app,&doc).await{
+ let processing=process_document(app,&doc);tokio::pin!(processing);
+ let mut heartbeat=tokio::time::interval(std::time::Duration::from_secs(30));
+ let outcome=loop{tokio::select!{
+  result=&mut processing=>break result,
+  _=heartbeat.tick()=>{sqlx::query("UPDATE resiro.documents SET claimed_at=now() WHERE id=$1 AND status IN ('reading','analyzing')").bind(id).execute(&app.db).await?;}
+ }};
+ match outcome{
   Ok(())=>{},
   Err(e)=>{
    tracing::warn!(document_id=%id,error=%e,"Document processing failed");

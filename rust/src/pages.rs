@@ -12,7 +12,10 @@ pub fn input(name:&str,label:&str,value:&str,kind:&str)->String{
  let extra=if kind=="number"{" min=0 step=any"}else if kind=="email"{" autocomplete=username"}else if name=="token"{" autocomplete=one-time-code"}else if kind=="password"&&label.to_lowercase().contains("new"){" autocomplete=new-password"}else if kind=="password"{" autocomplete=current-password"}else{""};
  format!("<label>{}<input name=\"{}\" type=\"{}\" value=\"{}\"{extra}></label>",e(label),e(name),e(kind),e(value))
 }
-pub fn badge(value:&str)->String{format!("<span class=\"badge {}\">{}</span>",if ["failed","rejected","locked"].contains(&value){"warn"}else{""},e(value))}
+pub fn badge(value:&str)->String{
+ let label=match value{"queued"=>"Waiting to be read","reading"=>"Reading document","analyzing"=>"Analysing","needs_review"=>"Needs review","processed"=>"Read","locked"=>"Password needed","unlocked"=>"Readable copy created","ai_pending"=>"Waiting for AI",_=>value};
+ format!("<span class=\"badge {}\">{}</span>",if ["failed","rejected","locked"].contains(&value){"warn"}else{""},e(&label.replace('_'," ")))
+}
 pub fn layout(user:Option<&auth::User>,title:&str,body:String)->Html<String>{
  let menu=if let Some(user)=user{format!("<a href=/app>Properties</a>{}<span class=muted>{}</span><form method=post action=/logout>{}<button class=quiet>Sign out</button></form>",if user.role=="supplier"{"<a href=/supplier>Supplier console</a>"}else{""},e(&user.email),csrf(user))}else{"<a href=/>Public website</a><a href=/login>Sign in</a>".into()};
  Html(format!("<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>{} · Resiro</title><link rel=stylesheet href=/public/app.css></head><body><header class=top><a class=brand href=/app><img src=/public/logo.png alt=Resiro></a><nav>{}</nav></header><main>{}</main><footer>Resiro · Your property’s digital record</footer></body></html>",e(title),menu,body))
