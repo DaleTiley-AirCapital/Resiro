@@ -1,5 +1,5 @@
 """Launch the installed Rust app and verify its accessible sign-in screen."""
-import json, os, re, subprocess, sys, time, xml.etree.ElementTree as ET
+import csv, io, json, os, re, subprocess, sys, time, xml.etree.ElementTree as ET
 from pathlib import Path
 apk=Path(sys.argv[1]).resolve()
 aapt=Path(os.environ["ANDROID_HOME"])/"build-tools"/"35.0.0"/"aapt"
@@ -25,7 +25,16 @@ subprocess.run(["adb","shell","input","keyevent","61"],check=True)
 subprocess.run(["adb","shell","input","text","demo123"],check=True)
 subprocess.run(["adb","shell","input","keyevent","4"],check=True)
 time.sleep(1)
-subprocess.run(["adb","shell","input","tap","60","420"],check=True)
+filled=out/"Resiro-android-filled-login.png"
+filled.write_bytes(subprocess.check_output(["adb","exec-out","screencap","-p"]))
+tsv=subprocess.check_output(["tesseract",str(filled),"stdout","tsv"],text=True,stderr=subprocess.DEVNULL)
+words=list(csv.DictReader(io.StringIO(tsv),delimiter="\t"))
+buttons=[w for w in words if w["text"].strip().lower() in ("sign","signin")]
+assert buttons, "Sign-in button is not visible"
+button=max(buttons,key=lambda w:int(w["top"]))
+x=int(button["left"])+int(button["width"])//2
+y=int(button["top"])+int(button["height"])//2
+subprocess.run(["adb","shell","input","tap",str(x),str(y)],check=True)
 dashboard=False
 for attempt in range(12):
     time.sleep(3)
