@@ -102,7 +102,8 @@ var indexPath = !string.IsNullOrWhiteSpace(webRootPath)
 
 if (File.Exists(indexPath))
 {
-    app.MapFallbackToFile("index.html");
+    app.MapGet("/", () => Results.File(indexPath, "text/html"));
+    app.MapFallbackToFile("application.html");
 }
 
 app.Run();
