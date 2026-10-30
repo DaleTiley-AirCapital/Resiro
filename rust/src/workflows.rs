@@ -30,6 +30,9 @@ fn parse_time(s:&str)->Result<DateTime<Utc>>{
  let parsed=chrono::NaiveDateTime::parse_from_str(s,"%Y-%m-%dT%H:%M").or_else(|_|chrono::NaiveDateTime::parse_from_str(s,"%Y-%m-%dT%H:%M:%S")).map_err(|_|bad("Choose a valid date and time"))?;
  Ok((parsed-Duration::hours(2)).and_utc())
 }
+pub fn display_time(value:&str)->String{
+ DateTime::parse_from_rfc3339(value).map(|t|t.with_timezone(&chrono::FixedOffset::east_opt(7200).unwrap()).format("%d %b %Y, %H:%M SAST").to_string()).unwrap_or_else(|_|value.to_owned())
+}
 fn local(t:DateTime<Utc>)->String{(t+Duration::hours(2)).format("%Y-%m-%dT%H:%M").to_string()}
 async fn notify(app:&App,org:Uuid,key:&str,title:&str,message:&str,path:&str)->Result<()>{
  sqlx::query("INSERT INTO resiro.notifications(id,org_id,source_key,title,message,path) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(source_key) DO NOTHING")
@@ -78,7 +81,7 @@ pub async fn reminder_action(State(app):State<App>,headers:HeaderMap,Path(id):Pa
  Ok(Redirect::to(&format!("/properties/{}?tab=maintenance",v(&row,"property_id"))))
 }
 fn reminder_list(rows:&[Value],user:&auth::User)->String{
- rows.iter().map(|r|format!("<article class=card><h3>{}</h3>{}<p>{} · {}</p><p>{}</p><form method=post action=/reminders/{}/action>{}<input type=hidden name=revision value={}><button name=action value=complete>Complete</button><button class=quiet name=action value=cancel>Cancel</button><label>Reschedule<input type=datetime-local name=due_at></label><button class=quiet name=action value=reschedule>Save new date</button></form></article>",e(&v(r,"title")),badge(&v(r,"status")),e(&v(r,"due_at")),e(&v(r,"recurrence")),e(&v(r,"description")),v(r,"id"),csrf(user),v(r,"revision"))).collect()
+ rows.iter().map(|r|format!("<article class=card><h3>{}</h3>{}<p>{} · {}</p><p>{}</p><form method=post action=/reminders/{}/action>{}<input type=hidden name=revision value={}><button name=action value=complete>Complete</button><button class=quiet name=action value=cancel>Cancel</button><label>Reschedule<input type=datetime-local name=due_at></label><button class=quiet name=action value=reschedule>Save new date</button></form></article>",e(&v(r,"title")),badge(&v(r,"status")),e(&display_time(&v(r,"due_at"))),e(&v(r,"recurrence")),e(&v(r,"description")),v(r,"id"),csrf(user),v(r,"revision"))).collect()
 }
 pub async fn property_section(app:&App,user:&auth::User,pid:Uuid)->Result<String>{
  let reminders:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(r) FROM resiro.reminders r WHERE property_id=$1 AND org_id=$2 ORDER BY due_at").bind(pid).bind(user.org_id).fetch_all(&app.db).await?;
@@ -128,7 +131,7 @@ pub async fn booking_action(State(app):State<App>,headers:HeaderMap,Path(id):Pat
 }
 fn booking_list(rows:&[Value],user:&auth::User,supplier:bool)->String{
  rows.iter().map(|b|format!("<article class=card><h3>{}</h3>{}<p>{} — {}</p><p>{}</p><form method=post action=/bookings/{}/action>{}<input type=hidden name=revision value={}>{}{}<button class=quiet name=action value=cancel>Cancel appointment</button></form></article>",
-  e(&v(b,"title")),badge(&v(b,"status")),e(&v(b,"start_at")),e(&v(b,"end_at")),e(&v(b,"description")),v(b,"id"),csrf(user),v(b,"revision"),
+  e(&v(b,"title")),badge(&v(b,"status")),e(&display_time(&v(b,"start_at"))),e(&display_time(&v(b,"end_at"))),e(&v(b,"description")),v(b,"id"),csrf(user),v(b,"revision"),
   if supplier&&b["status"]=="requested"{"<button name=action value=accept>Accept request</button><button class=quiet name=action value=decline>Decline</button>"}else{""},
   if supplier&&b["status"]=="confirmed"{"<button name=action value=complete>Complete appointment</button>"}else{""})).collect()
 }

@@ -1,4 +1,4 @@
-use crate::api::{self,Session,text};
+use crate::api::{self,Session,text,when};
 use dioxus::prelude::*;
 use serde_json::{Value,json};
 
@@ -29,7 +29,7 @@ pub fn Maintenance(session:Session,property_id:String)->Element{
   match &*data.read_unchecked(){
    Some(Ok(v))=>rsx!{
     if let Some(rows)=v.get("reminders").and_then(Value::as_array){for item in rows{
-     section {class:"card",h4 {"{text(item,\"title\")}"}p {"{text(item,\"due_at\")} · {text(item,\"status\")}"}
+     section {class:"card",h4 {"{text(item,\"title\")}"}p {"{when(item,\"due_at\")} · {text(item,\"status\")}"}
       if item["status"]=="open"{for action in ["complete","cancel"]{
        {let s=session.clone();let id=text(item,"id");let version=item["revision"].to_string();rsx!{button {class:"secondary",onclick:move |_|{
         let s=s.clone();let id=id.clone();let version=version.clone();async move{
@@ -55,7 +55,7 @@ pub fn Maintenance(session:Session,property_id:String)->Element{
      }}}
     }
     if let Some(rows)=v.get("bookings").and_then(Value::as_array){for item in rows{
-     section {class:"card",h4 {"{text(item,\"title\")}"}p {"{text(item,\"start_at\")} · {text(item,\"status\")}"}
+     section {class:"card",h4 {"{text(item,\"title\")}"}p {"{when(item,\"start_at\")} · {text(item,\"status\")}"}
       if item["status"]=="requested"||item["status"]=="confirmed"{
        {let s=session.clone();let id=text(item,"id");let version=item["revision"].to_string();rsx!{button {class:"secondary",onclick:move |_|{
         let s=s.clone();let id=id.clone();let version=version.clone();async move{
@@ -85,7 +85,7 @@ pub fn SupplierWorkspace(session:Session,onlogout:EventHandler<()>)->Element{
    Some(Ok(v))=>rsx!{
     h3 {"{text(v,\"name\")}"}
     if let Some(rows)=v.get("bookings").and_then(Value::as_array){for item in rows{
-     section {class:"card",h4 {"{text(item,\"title\")}"}p {"{text(item,\"address\")}"}p {"{text(item,\"start_at\")} · {text(item,\"status\")}"}
+     section {class:"card",h4 {"{text(item,\"title\")}"}p {"{text(item,\"address\")}"}p {"{when(item,\"start_at\")} · {text(item,\"status\")}"}
       for action in if item["status"]=="requested"{vec!["accept","decline"]}else if item["status"]=="confirmed"{vec!["complete","cancel"]}else{vec![]}{
        {let s=session.clone();let id=text(item,"id");let version=item["revision"].to_string();rsx!{button {class:"secondary",onclick:move |_|{
         let s=s.clone();let id=id.clone();let version=version.clone();async move{

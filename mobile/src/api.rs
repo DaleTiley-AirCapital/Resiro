@@ -27,3 +27,5 @@ pub async fn upload(s: &Session,property: &str,name: String,bytes: Vec<u8>) -> R
     let r=reqwest::Client::new().post(format!("{BASE}/api/documents")).bearer_auth(&s.token).multipart(form).send().await.map_err(|_|"Upload interrupted. Please try again.".to_string())?;
     response(r).await
 }
+
+pub fn when(v:&Value,key:&str)->String{let raw=text(v,key);chrono::DateTime::parse_from_rfc3339(&raw).map(|t|t.with_timezone(&chrono::FixedOffset::east_opt(7200).unwrap()).format("%d %b %Y, %H:%M SAST").to_string()).unwrap_or(raw)}
