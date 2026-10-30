@@ -1,3 +1,21 @@
+# Resiro: Rust property platform
+
+The active Railway application uses the Rust service in `rust/`, PostgreSQL and private S3-compatible storage. The public marketing page is built from the existing marketing archive without changing its source. The final server image contains the Rust binary and document-reading tools; it does not run the legacy Node or .NET application.
+
+The property workspace is designed for phones, with private document records, original-folder provenance, checksum verification, source-grounded AI analysis, reviewable facts, assets, reminders, appointments and supplier workflows. Large document analyses save each completed section so an interruption can resume without discarding completed work. Protected PDFs retain their encrypted originals and can create a private readable copy; passwords are not retained.
+
+Native iOS and Android clients are in [mobile](mobile/README.md). Cloud preview builds and emulator/simulator checks run in GitHub Actions. Preview binaries are not App Store or Play Store releases. Publisher accounts, production signing, physical-device acceptance and store review remain separate release gates.
+
+Production uses `Dockerfile.rust.production`; the root `Dockerfile` has the same Rust build. Railway cache mounts are scoped to the production service. `Dockerfile.rust` is the separate preview-service configuration. Required variables are `DATABASE_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_URL_STYLE`, `OPENAI_API_KEY`, `OPENAI_MODEL` and `PRIVATE_OWNER_EMAIL`. Keep secrets in Railway, never in source or mobile clients. `IMPORT_TOKEN` is a temporary intake-only capability and should be disabled after import.
+
+Personal property documents and intake manifests are runtime data. They must not be committed, bundled into mobile apps, or copied into shared demo accounts. Native CAD/design formats are excluded; PDF plans remain supported.
+
+## Legacy implementation notes
+
+The earlier implementation and its original documentation remain below for migration and rollback context. They are not the active production runtime.
+
+---
+
 # Property DNA Platform
 
 A comprehensive digital property management platform that creates unique, lifelong digital identities for properties in South Africa.

@@ -100,7 +100,7 @@ pub async fn add_booking(State(app):State<App>,headers:HeaderMap,Path(pid):Path<
  let start=parse_time(data.get("start_at").map(String::as_str).unwrap_or(""))?;
  let duration=data.get("duration").and_then(|s|s.parse::<i64>().ok()).unwrap_or(60);if ![30,60,90,120,180,240].contains(&duration){return Err(bad("Choose a duration in 30-minute steps"));}
  let end=start+Duration::minutes(duration);let local=start+Duration::hours(2);let local_end=end+Duration::hours(2);
- if start<=Utc::now()+Duration::minutes(5)||start>Utc::now()+Duration::days(180)||local.weekday().number_from_monday()>5||local.hour()<8||local_end.hour()>17||(local_end.hour()==17&&local_end.minute()>0)||local.minute()%30!=0{return Err(bad("Choose a future weekday time between 08:00 and 17:00 South Africa time"));}
+ if start<=Utc::now()+Duration::minutes(5)||start>Utc::now()+Duration::days(180)||local.weekday().number_from_monday()>5||local.hour()<8||local.hour()>=17||local.date_naive()!=local_end.date_naive()||local_end.hour()>17||(local_end.hour()==17&&local_end.minute()>0)||local.minute()%30!=0{return Err(bad("Choose a future weekday time between 08:00 and 17:00 South Africa time"));}
  let title=data.get("title").filter(|s|!s.trim().is_empty()).ok_or_else(||bad("Service description required"))?;
  let mut tx=app.db.begin().await?;sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))").bind(supplier.to_string()).execute(&mut *tx).await?;
  let conflict:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM resiro.bookings WHERE supplier_org=$1 AND status='confirmed' AND start_at<$3 AND end_at>$2)").bind(supplier).bind(start).bind(end).fetch_one(&mut *tx).await?;
