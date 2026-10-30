@@ -1,9 +1,12 @@
 async fn decrypted_pdf(bytes:&[u8],password:&str)->anyhow::Result<Vec<u8>>{
- let input=tempfile::NamedTempFile::new()?;let output=tempfile::NamedTempFile::new()?;let mut secret=tempfile::NamedTempFile::new()?;
- std::io::Write::write_all(secret.as_file_mut(),password.as_bytes())?;
+ let input=tempfile::NamedTempFile::new()?;let output=tempfile::NamedTempFile::new()?;
  tokio::fs::write(input.path(),bytes).await?;
- let mut command=tokio::process::Command::new("qpdf");command.arg("--warning-exit-0").arg(format!("--password-file={}",secret.path().display())).arg("--decrypt").arg(input.path()).arg(output.path()).kill_on_drop(true);
- let result=tokio::time::timeout(std::time::Duration::from_secs(60),command.output()).await??;
+ let mut command=tokio::process::Command::new("qpdf");
+ command.arg("--warning-exit-0").arg("--password-file=-").arg("--decrypt").arg(input.path()).arg(output.path())
+  .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+ let mut child=command.spawn()?;let mut pipe=child.stdin.take().ok_or_else(||anyhow::anyhow!("Unable to open private decryption input"))?;
+ tokio::io::AsyncWriteExt::write_all(&mut pipe,password.as_bytes()).await?;tokio::io::AsyncWriteExt::shutdown(&mut pipe).await?;drop(pipe);
+ let result=tokio::time::timeout(std::time::Duration::from_secs(60),child.wait_with_output()).await??;
  if !result.status.success(){anyhow::bail!("That password did not unlock this PDF. Please check it and try again.");}
  Ok(tokio::fs::read(output.path()).await?)
 }
