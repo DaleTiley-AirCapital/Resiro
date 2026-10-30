@@ -79,6 +79,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
     }
    }}
    if tab()=="Documents"{
+    button {class:"secondary",onclick:move |_|revision+=1,"Refresh documents"}
     form {onsubmit:move|e|{e.prevent_default();query.set(search());document.set(None);},
      input {r#type:"search",placeholder:"Search receipts, plans, certificates…",value:"{search}",oninput:move|e|search.set(e.value())}
      button {r#type:"submit","Search"}
@@ -86,7 +87,8 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
     if let Some(d)=document(){
      button {class:"secondary",onclick:move |_|document.set(None),"‹ Documents"}
      h3 {"{text(&d,\"title\")}"}p {class:"muted","{text(&d,\"name\")}"}
-     pre {class:"source-text","{document_text}"}
+     if text(&d,"status")=="locked"{ ProtectedPdf {session:session.clone(),document_id:text(&d,"id"),onunlocked:move |_|{document.set(None);revision+=1;message.set("A readable copy was created. It will appear in Documents while analysis runs.".into());}} }
+     if document_text().trim().is_empty(){p {class:"muted","Text is not available yet. Your original is safely stored."}}else{pre {class:"source-text","{document_text}"}}
     }else{
      match &*documents.read_unchecked(){
       Some(Ok(value))=>rsx!{
@@ -120,7 +122,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
     if let Some(a)=answer(){section {class:"card",
      p {"{text(&a,\"answer\")}"}p {class:"muted","Evidence confidence: {text(&a,\"confidence\")}"}
      if let Some(sources)=a.get("citations").and_then(Value::as_array){for source in sources{
-      blockquote {p {"{text(source,\"quote\")}"}small {"Document: {text(source,\"document_id\")}"}}
+      blockquote {p {"{text(source,\"quote\")}"}small {"Source: {text(source,\"source_name\")}"}}
      }}
     }}
    }
@@ -173,4 +175,20 @@ fn Activity(session:Session,property_id:String)->Element{
    None=>rsx!{p {"Loading activity…"}}
   }
  }
+}
+
+#[component]
+fn ProtectedPdf(session:Session,document_id:String,onunlocked:EventHandler<()>)->Element{
+ let mut password=use_signal(String::new);let mut busy=use_signal(||false);let mut message=use_signal(String::new);
+ rsx!{section {class:"card",h4 {"Unlock protected PDF"}p {"The encrypted original is preserved. Your document password is used privately and is not retained."}
+  form {onsubmit:move |e|{e.prevent_default();let s=session.clone();let id=document_id.clone();async move{
+   if busy(){return}busy.set(true);let secret=password();password.set(String::new());
+   match api::post(&s,&format!("/api/documents/{id}/unlock"),json!({"password":secret})).await{Ok(_)=>onunlocked.call(()),Err(e)=>message.set(e)}
+   busy.set(false);
+  }},
+   input {r#type:"password",autocomplete:"off",required:true,value:"{password}",oninput:move |e|password.set(e.value()),placeholder:"Document password"}
+   button {r#type:"submit",disabled:busy(),if busy(){"Unlocking…"}else{"Unlock privately"}}
+  }
+  if !message().is_empty(){p {role:"alert","{message}"}}
+ }}
 }
