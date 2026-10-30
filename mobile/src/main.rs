@@ -19,18 +19,22 @@ fn App()->Element{
 fn Login(onlogin:EventHandler<Session>)->Element{
  let mut email=use_signal(String::new);let mut password=use_signal(String::new);
  let mut message=use_signal(String::new);let mut busy=use_signal(||false);
+ let mut submit=move||{
+  if busy(){return}busy.set(true);message.set(String::new());
+  let address=email();let secret=password();
+  spawn(async move{
+   match api::login(address,secret).await{Ok(s)=>{password.set(String::new());onlogin.call(s)},Err(e)=>message.set(e)}
+   busy.set(false);
+  });
+ };
  rsx!{main {class:"mobile-shell",
   h1 {"Resiro"} p {"Your home, in one place."}
   section {class:"card",
    h2 {"Sign in"}
-   form { onsubmit:move |e|{e.prevent_default();async move{
-    if busy(){return}busy.set(true);message.set(String::new());
-    match api::login(email(),password()).await{Ok(s)=>{password.set(String::new());onlogin.call(s)},Err(e)=>message.set(e)}
-    busy.set(false);
-   }},
-    label {"Email" input {r#type:"email",autocomplete:"username",value:"{email}",required:true,oninput:move|e|email.set(e.value())}}
-    label {"Password" input {r#type:"password",autocomplete:"current-password",value:"{password}",required:true,oninput:move|e|password.set(e.value())}}
-    button {r#type:"submit",disabled:busy(),if busy(){"Signing in…"}else{"Sign in"}}
+   form {onsubmit:move |e|{e.prevent_default();submit();},
+    label {"Email" input {r#type:"email",name:"email",autocomplete:"username",required:true,oninput:move|e|email.set(e.value())}}
+    label {"Password" input {r#type:"password",name:"password",autocomplete:"current-password",required:true,oninput:move|e|password.set(e.value())}}
+    button {r#type:"button",onclick:move |_|submit(),disabled:busy(),if busy(){"Signing in…"}else{"Sign in"}}
    }
    if !message().is_empty(){p {role:"alert","{message}"}}
    p {class:"muted","Use your private account for personal documents. Shared demo accounts show demonstration properties only."}

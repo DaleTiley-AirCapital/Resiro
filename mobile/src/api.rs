@@ -10,7 +10,7 @@ async fn response(r: reqwest::Response) -> Result<Value,String> {
     if status.is_success() { Ok(value) } else { Err(value.get("error").and_then(Value::as_str).unwrap_or("Request failed. Please try again.").to_string()) }
 }
 pub async fn login(email: String,password: String) -> Result<Session,String> {
-    let r=reqwest::Client::new().post(format!("{BASE}/api/session")).json(&serde_json::json!({"email":email,"password":password})).send().await.map_err(|_|"Unable to connect. Check your internet connection.".to_string())?;
+    let r=reqwest::Client::new().post(format!("{BASE}/api/session")).json(&serde_json::json!({"email":email,"password":password})).timeout(std::time::Duration::from_secs(30)).send().await.map_err(|_|"Unable to connect. Check your internet connection.".to_string())?;
     serde_json::from_value(response(r).await?).map_err(|_|"Unable to open this session.".to_string())
 }
 pub async fn get(s: &Session,path: &str) -> Result<Value,String> {
