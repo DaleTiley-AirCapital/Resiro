@@ -15,29 +15,9 @@ out=Path("mobile/previews");out.mkdir(parents=True,exist_ok=True)
 (out/"android-ui.xml").write_text(xml)
 (out/"android-logcat.txt").write_text(subprocess.check_output(["adb","logcat","-d"],text=True,errors="replace"))
 (out/"Resiro-android-launch.png").write_bytes(subprocess.check_output(["adb","exec-out","screencap","-p"]))
-ocr=subprocess.check_output(["tesseract",str(out/"Resiro-android-launch.png"),"stdout"],text=True,stderr=subprocess.DEVNULL)
-assert re.search(r"sign\s*in",ocr,re.I) and "Email" in ocr, "Native sign-in screen did not render"
-# Interact with the screen that the emulator screenshot verifies. UIAutomator does
-# not expose this debug WebView's DOM, so use its observed 320x640 touch layout.
-subprocess.run(["adb","shell","input","tap","60","260"],check=True)
-subprocess.run(["adb","shell","input","text","dale.tiley@email.com"],check=True)
-subprocess.run(["adb","shell","input","keyevent","61"],check=True)
-subprocess.run(["adb","shell","input","text","demo123"],check=True)
-time.sleep(0.5)
-# Move from the password field to the sign-in button and activate it. This avoids
-# stale touch coordinates while the keyboard changes the WebView viewport.
-subprocess.run(["adb","shell","input","keyevent","61"],check=True)
-subprocess.run(["adb","shell","input","keyevent","66"],check=True)
-dashboard=False
-for attempt in range(12):
-    time.sleep(3)
-    image=subprocess.check_output(["adb","exec-out","screencap","-p"])
-    (out/"Resiro-android-dashboard.png").write_bytes(image)
-    words=subprocess.check_output(["tesseract",str(out/"Resiro-android-dashboard.png"),"stdout"],text=True,stderr=subprocess.DEVNULL)
-    if re.search(r"my\s+properties",words,re.I):
-        dashboard=True
-        break
+os.environ["RESIRO_ANDROID_PACKAGE"]=package
+result=subprocess.run(["node","mobile/scripts/android_dom_smoke.cjs"])
 (out/"android-logcat.txt").write_text(subprocess.check_output(["adb","logcat","-d"],text=True,errors="replace"))
-assert dashboard, "Native owner dashboard did not load after demo sign-in"
-(out/"android-launch-check.json").write_text(json.dumps({"package":package,"activity":activity,"installed":True,"sign_in_screen_rendered":True,"dashboard_login_tested":True}))
-print("Android application installed, launched, signed in and loaded the owner dashboard.")
+if result.returncode:
+    (out/"Resiro-android-failure.png").write_bytes(subprocess.check_output(["adb","exec-out","screencap","-p"]))
+    raise SystemExit(result.returncode)

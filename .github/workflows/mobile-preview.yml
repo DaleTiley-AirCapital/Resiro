@@ -64,6 +64,8 @@ jobs:
           sudo chmod 666 /dev/kvm
           sudo apt-get update -qq
           sudo apt-get install -y -qq tesseract-ocr
+          npm install --prefix "$RUNNER_TEMP/native-checks" --no-audit --no-fund playwright
+          echo "NATIVE_PLAYWRIGHT_PATH=$RUNNER_TEMP/native-checks/node_modules/playwright" >> "$GITHUB_ENV"
       - name: Launch Android application
         uses: reactivecircus/android-emulator-runner@v2
         with:
