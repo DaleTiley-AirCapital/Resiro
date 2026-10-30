@@ -44,7 +44,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
  let mut search=use_signal(String::new);let mut query=use_signal(String::new);
  let session_for_docs=session.clone();
  let documents=use_resource(move||{let s=session_for_docs.clone();let p=property();let q=query();let _=revision();async move{
-  if let Some(p)=p{let id=text(&p,"id");let suffix: String=url::form_urlencoded::Serializer::new(String::new()).append_pair("q",&q).finish();api::get(&s,&format!("/api/properties/{id}/documents?{suffix}")).await}else{Ok(json!([]))}
+  if let Some(p)=p{let id=text(&p,"id");let suffix: String=url::form_urlencoded::Serializer::new(String::new()).append_pair("q",&q).finish();api::get(&s,&if q.trim().is_empty(){format!("/api/properties/{id}/documents")}else{format!("/api/properties/{id}/search?{suffix}")}).await}else{Ok(json!([]))}
  }});
  let mut document=use_signal(||None::<Value>);let mut document_text=use_signal(String::new);
  let mut message=use_signal(String::new);let mut busy=use_signal(||false);
@@ -53,7 +53,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
  rsx!{main {class:"mobile-shell",
   header {div {h1 {"Resiro"}p {class:"muted","{name}"}} button {onclick:move |_|onlogout.call(()),"Sign out"}}
   if let Some(p)=property(){
-   {let s=session.clone();rsx!{button {class:"secondary",onclick:move |_|{property.set(None);document.set(None);answer.set(None);},"‹ My properties"}
+   {let s=session.clone();let upload_property=text(&p,"id");rsx!{button {class:"secondary",onclick:move |_|{property.set(None);document.set(None);answer.set(None);},"‹ My properties"}
     h2 {"{text(&p,\"name\")}"}p {class:"muted","{text(&p,\"address\")}"}
     if tab()=="Home"{
      section {class:"card",h3 {"Property file"}p {"Documents, purchases and maintenance belong to this home."}
@@ -63,7 +63,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
      }
      section {class:"card",h3 {"Capture something"}p {"Add an invoice, receipt, photograph or certificate. Resiro reads it and keeps the source with the extracted details."}
       input {r#type:"file",multiple:true,accept:".pdf,.jpg,.jpeg,.png,.xlsx,.docx,.eml,.msg,.zip",onchange:move |evt|{
-       let s=s.clone();let id=text(&p,"id");async move{
+       let s=s.clone();let id=upload_property.clone();async move{
         if busy(){return}busy.set(true);message.set("Uploading…".into());
         let mut uploaded=0;let mut errors=Vec::new();
         for file in evt.files(){let filename=file.name();match file.read_bytes().await{
