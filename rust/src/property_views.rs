@@ -66,7 +66,7 @@ fn overview(p:&Value,docs:&[Value],facts:&[Value],user:&auth::User,pending:usize
  for (key,label) in [("bedrooms","Bedrooms"),("bathrooms","Bathrooms"),("toilets","Toilets"),("garages","Garages"),("floor_area_m2","Floor area (m²)"),("stand_area_m2","Stand area (m²)")]{
   let confirmed=v(&p["data"],key);
   let candidates=facts.iter().filter(|f|v(f,"fact_key")==format!("property.{key}")).collect::<Vec<_>>();
-  let value=if !confirmed.is_empty(){confirmed}else{let mut values=candidates.iter().map(|f|v(f,"value")).collect::<Vec<_>>();values.sort();values.dedup();if values.len()==1{format!("{} · candidate",values[0])}else{"Needs confirmation".into()}};
+  let value=if !confirmed.is_empty(){confirmed}else{let reviewed=candidates.iter().filter(|f|f["review_status"]=="confirmed").copied().collect::<Vec<_>>();let chosen=if reviewed.is_empty(){&candidates}else{&reviewed};let mut values=chosen.iter().map(|f|v(f,"value")).collect::<Vec<_>>();values.sort();values.dedup();if values.len()==1{format!("{} · {}",values[0],if reviewed.is_empty(){"candidate"}else{"confirmed"})}else{"Needs confirmation".into()}};
   metrics.push_str(&format!("<div><span>{label}</span><strong>{}</strong></div>",e(&value)));
  }
  let mut fields=String::new();for (key,label,kind) in [("erf_number","Stand / ERF","text"),("estate","Estate / suburb","text"),("municipality","Municipality","text"),("bedrooms","Bedrooms","number"),("bathrooms","Bathrooms","number"),("toilets","Toilets","number"),("garages","Garages","number"),("floor_area_m2","Floor area (m²)","number"),("stand_area_m2","Stand area (m²)","number"),("features","Features (comma-separated)","text")]{
