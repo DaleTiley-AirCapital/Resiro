@@ -155,7 +155,7 @@ pub async fn edit_form(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uui
 }
 pub async fn retry(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,Form(input):Form<HashMap<String,String>>)->Result<Redirect>{
  let user=auth::user(&app,&headers).await?;auth::csrf(&user,input.get("csrf").map(String::as_str).unwrap_or(""))?;
- let changed=sqlx::query("UPDATE resiro.documents SET status='queued',error=NULL,claimed_at=NULL,attempts=0 WHERE id=$1 AND org_id=$2 AND status NOT IN ('reading','analyzing')")
+ let changed=sqlx::query("UPDATE resiro.documents SET status='queued',error=NULL,claimed_at=NULL,attempts=0,next_attempt_at=now() WHERE id=$1 AND org_id=$2 AND status NOT IN ('reading','analyzing')")
   .bind(id).bind(user.org_id).execute(&app.db).await?;
  if changed.rows_affected()==0{return Err(bad("This document is being processed or was not found"));}Ok(Redirect::to(&format!("/documents/{id}")))
 }

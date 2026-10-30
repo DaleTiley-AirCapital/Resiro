@@ -103,8 +103,8 @@ pub async fn extract(name:&str,bytes:&[u8])->anyhow::Result<Extracted>{
  Ok(result)
 }
 pub async fn run(app:App){
- // Two independent workers use SKIP LOCKED to claim each document once.
- for _ in 0..2{let state=app.clone();tokio::spawn(async move{loop{
+ // Bounded workers use SKIP LOCKED to claim each document once.
+ for _ in 0..std::env::var("DOCUMENT_WORKERS").ok().and_then(|s|s.parse::<usize>().ok()).unwrap_or(2).clamp(1,6){let state=app.clone();tokio::spawn(async move{loop{
   match process_one(&state).await{Ok(true)=>{},Ok(false)=>tokio::time::sleep(std::time::Duration::from_secs(3)).await,Err(e)=>{tracing::warn!(error=%e,"Document worker will retry");tokio::time::sleep(std::time::Duration::from_secs(5)).await;}}
  }});}
 }
@@ -118,7 +118,7 @@ async fn process_one(app:&App)->Result<bool>{
   Ok(())=>{},
   Err(e)=>{
    tracing::warn!(document_id=%id,error=%e,"Document processing failed");
-   sqlx::query("UPDATE resiro.documents SET status=CASE WHEN attempts<4 THEN 'queued' ELSE 'failed' END,error=$1,claimed_at=NULL,next_attempt_at=now()+make_interval(secs=>60*attempts) WHERE id=$2").bind(e.to_string().chars().take(500).collect::<String>()).bind(id).execute(&app.db).await?;
+   sqlx::query("UPDATE resiro.documents SET status=CASE WHEN attempts<4 THEN 'queued' ELSE 'failed' END,error=$1,claimed_at=NULL,next_attempt_at=now()+make_interval(secs=>60*attempts) WHERE id=$2").bind(match &e{Error::Other(inner)=>inner.to_string(),Error::Message(_,message)=>message.clone(),Error::Database(_)=>"Database operation failed; contact support".to_owned()}.chars().take(500).collect::<String>()).bind(id).execute(&app.db).await?;
   }
  }Ok(true)
 }

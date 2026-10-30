@@ -6,7 +6,17 @@ use chrono::{Utc,DateTime,Duration,Datelike,Timelike};
 use std::collections::HashMap;
 
 pub fn routes()->Router<App>{
- Router::new().route("/properties/{id}/reminders",post(add_reminder))
+ Router::new()
+ .route("/api/properties/{id}/maintenance",get(maintenance_json))
+ .route("/api/properties/{id}/reminders",post(add_reminder_json))
+ .route("/api/reminders/{id}/action",post(reminder_action_json))
+ .route("/api/properties/{id}/bookings",post(add_booking_json))
+ .route("/api/bookings/{id}/action",post(booking_action_json))
+ .route("/api/supplier",get(supplier_json))
+ .route("/api/supplier/profile",post(save_profile_json))
+ .route("/api/supplier/jobs",post(add_job_json))
+ .route("/api/notifications/{id}/read",post(read_notice_json))
+ .route("/properties/{id}/reminders",post(add_reminder))
  .route("/reminders/{id}/action",post(reminder_action))
  .route("/properties/{id}/bookings",post(add_booking))
  .route("/bookings/{id}/action",post(booking_action))
@@ -152,3 +162,5 @@ pub async fn notify_due(app:App){loop{
  tokio::time::sleep(std::time::Duration::from_secs(20)).await;
 }}
 #[cfg(test)]mod tests{use super::*;#[test]fn south_africa_time(){assert_eq!(parse_time("2030-01-01T10:00").unwrap().hour(),8);}}
+
+include!("workflow_api.rs");

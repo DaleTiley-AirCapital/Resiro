@@ -56,6 +56,7 @@ async fn main()->anyhow::Result<()>{
  tokio::spawn(workflows::notify_due(state.clone()));
  let app=Router::new()
   .route("/",get(pages::marketing))
+  .route("/favicon.ico",get(||async{axum::response::Redirect::permanent("/public/logo.png")}))
   .route("/health",get(||async{axum::Json(json!({"status":"ready","runtime":"rust","version":"2.0"}))}))
   .route("/login",get(pages::login).post(auth::login_form))
   .route("/api/session",post(auth::login_json).layer(DefaultBodyLimit::max(8192)))
@@ -89,7 +90,21 @@ async fn main()->anyhow::Result<()>{
   .merge(workflows::routes())
   .nest_service("/assets",tower_http::services::ServeDir::new("/app/marketing/assets"))
   .nest_service("/public",tower_http::services::ServeDir::new("/app/public"))
-  .layer(DefaultBodyLimit::max(100*1024*1024)).with_state(state);
+  .layer(DefaultBodyLimit::max(100*1024*1024)).layer(axum::middleware::from_fn(security_headers))
+  .with_state(state);
  let address=format!("0.0.0.0:{}",std::env::var("PORT").unwrap_or("8080".into()));
  tracing::info!("Resiro Rust server ready");axum::serve(tokio::net::TcpListener::bind(address).await?,app).await?;Ok(())
+}
+
+async fn security_headers(request:axum::extract::Request,next:axum::middleware::Next)->Response{
+ let path=request.uri().path();let private=path!="/"&&!path.starts_with("/assets/")&&!path.starts_with("/public/")&&path!="/favicon.ico"&&path!="/health";
+ let mut response=next.run(request).await;
+ response.headers_mut().insert("x-content-type-options",axum::http::HeaderValue::from_static("nosniff"));
+ response.headers_mut().insert("referrer-policy",axum::http::HeaderValue::from_static("no-referrer"));
+ response.headers_mut().insert("x-frame-options",axum::http::HeaderValue::from_static("DENY"));
+ if private{
+  response.headers_mut().insert("cache-control",axum::http::HeaderValue::from_static("no-store"));
+  response.headers_mut().insert("content-security-policy",axum::http::HeaderValue::from_static("default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+ }
+ response
 }
