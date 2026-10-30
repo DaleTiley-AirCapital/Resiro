@@ -82,6 +82,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseRouting();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -93,7 +94,7 @@ if (!string.IsNullOrWhiteSpace(webRootPath) && Directory.Exists(webRootPath))
     app.UseStaticFiles();
 }
 
-app.UseRouting();
+
 
 var indexPath = !string.IsNullOrWhiteSpace(webRootPath)
     ? Path.Combine(webRootPath, "index.html")
