@@ -24,7 +24,7 @@ interface Property {
 
 // Individual User Dashboard - Properties Overview
 function IndividualDashboard() {
-  const { data: properties, isLoading } = useQuery<Property[]>({
+  const { data: properties, isLoading, error } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
     enabled: true,
   });
@@ -43,10 +43,11 @@ function IndividualDashboard() {
     complianceStatus: 'good'
   };
 
-  const allProperties = properties || [demoProperty];
+  const allProperties = [demoProperty, ...(properties || [])];
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="text-red-700">Properties could not be loaded. Refresh to retry.</p>}
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Your Property Portfolio</h2>
@@ -101,7 +102,7 @@ function IndividualDashboard() {
                   <div className="flex justify-between items-start">
                     <div className="flex items-center space-x-2">
                       <Home className="w-5 h-5 text-primary" />
-                      <CardTitle className="text-lg">{property.dnaCode}</CardTitle>
+                      <CardTitle className="text-lg">{property.dnaCode || (property as any).dnaId}</CardTitle>
                     </div>
                     {property.isDemo && (
                       <Badge variant="outline" className="text-xs">
@@ -197,7 +198,8 @@ function CompanyDashboard() {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
   
   // Determine user type from auth context
   const userType = user?.userType || 'homeowner';
@@ -246,15 +248,16 @@ export default function Dashboard() {
       <div className="bg-white border-b border-gray-200">
         <div className="px-8 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-10">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-10">
               <div className="flex-shrink-0">
                 <Logo size="lg" />
               </div>
-              <div className="border-l border-gray-300 pl-10 ml-2">
+              <div className="sm:border-l border-gray-300 sm:pl-10 sm:ml-2">
                 <h1 className="text-2xl font-semibold text-gray-900">{getTitle()}</h1>
                 <p className="text-gray-600">{getSubtitle()}</p>
               </div>
             </div>
+            <Button variant="outline" onClick={() => { logout(); navigate("/login"); }}>Sign out</Button>
           </div>
         </div>
       </div>

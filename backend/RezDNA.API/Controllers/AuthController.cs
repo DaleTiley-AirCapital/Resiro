@@ -68,13 +68,13 @@ public class AuthController : ControllerBase
             }
 
             // Handle demo users
-            if (userIdClaim == "demo-property")
+            if (userIdClaim == "00000000-0000-0000-0000-000000000001")
             {
                 return Ok(new
                 {
                     user = new
                     {
-                        id = "demo-property",
+                        id = "00000000-0000-0000-0000-000000000001",
                         username = "dale.tiley@email.com",
                         email = "dale.tiley@email.com",
                         firstName = "Dale",
@@ -84,20 +84,20 @@ public class AuthController : ControllerBase
                     },
                     organization = new
                     {
-                        id = "demo-org-property",
+                        id = "00000000-0000-0000-0000-000000000003",
                         name = "Dale Tiley Properties",
                         slug = "dale-tiley-properties"
                     }
                 });
             }
 
-            if (userIdClaim == "demo-supplier")
+            if (userIdClaim == "00000000-0000-0000-0000-000000000002")
             {
                 return Ok(new
                 {
                     user = new
                     {
-                        id = "demo-supplier",
+                        id = "00000000-0000-0000-0000-000000000002",
                         username = "info@millenniumroofing.co.za",
                         email = "info@millenniumroofing.co.za",
                         firstName = "Millennium",
@@ -107,7 +107,7 @@ public class AuthController : ControllerBase
                     },
                     organization = new
                     {
-                        id = "demo-org-supplier",
+                        id = "00000000-0000-0000-0000-000000000004",
                         name = "Millennium Roofing (Pty) Ltd",
                         slug = "millennium-roofing"
                     }

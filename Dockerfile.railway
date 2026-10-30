@@ -27,6 +27,7 @@ COPY --from=frontend /app/dist ./wwwroot
 COPY --from=application /application-build ./wwwroot/application
 RUN cp wwwroot/application/index.html wwwroot/application.html \
     && sed -i 's|</body>|<a href="/login" style="position:fixed;bottom:24px;right:24px;z-index:1000;background:#1d4ed8;color:white;padding:12px 20px;border-radius:8px;font:600 16px system-ui;text-decoration:none;box-shadow:0 4px 12px #0003">Open property dashboard</a></body>|' wwwroot/index.html
+COPY demo_docs/ ./wwwroot/demo_docs/
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
