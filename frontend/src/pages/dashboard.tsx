@@ -32,7 +32,7 @@ function IndividualDashboard() {
   // Demo property for new users
   const demoProperty: Property = {
     id: 'demo',
-    dnaCode: 'RES-DEMO-CT',
+    dnaCode: 'DNA-DEMO-CT',
     address: '123 Example Street, Cape Town',
     erfNumber: 'ERF123',
     township: 'Gardens',
@@ -40,7 +40,7 @@ function IndividualDashboard() {
     isDemo: true,
     documentsCount: 5,
     lastActivity: 'Demo data updated',
-    complianceStatus: 'good'
+    complianceStatus: undefined
   };
 
   const allProperties = [demoProperty, ...(properties || [])];
@@ -52,7 +52,7 @@ function IndividualDashboard() {
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Your Property Portfolio</h2>
         <p className="text-gray-600 mb-4">
-          Each property gets a unique DNA code that travels with it forever. Manage your documents, get AI compliance checking, and protect your investment.
+          Each property gets a unique DNA code. Manage your property records and documents in one place.
         </p>
         <div className="flex flex-wrap gap-4">
           <div className="bg-white px-4 py-2 rounded-lg border">
@@ -244,6 +244,7 @@ export default function Dashboard() {
   
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {user?.id === "00000000-0000-0000-0000-000000000001" && <p className="p-3 bg-blue-50 border">Shared demo account. Saved changes are visible to other demo visitors. Use sample documents only.</p>}
       {/* Header with Logo */}
       <div className="bg-white border-b border-gray-200">
         <div className="px-8 py-4">

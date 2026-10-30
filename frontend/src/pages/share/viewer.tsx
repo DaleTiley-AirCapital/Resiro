@@ -34,7 +34,7 @@ export default function ShareViewer() {
   };
   return <main className="max-w-3xl mx-auto p-4 sm:p-8"><Card><CardHeader><CardTitle>Shared Job Documents</CardTitle></CardHeader><CardContent className="space-y-4">
     {query.isLoading && <p>Loading shared job...</p>}
-    {query.error && <><p role="alert">{query.error.message}</p><form onSubmit={e=>{e.preventDefault();setSubmittedPassword(password);query.refetch();}} className="space-y-3">
+    {query.error && <><p role="alert">{query.error.message}</p><form onSubmit={e=>{e.preventDefault();if(password===submittedPassword)query.refetch();else setSubmittedPassword(password);}} className="space-y-3">
       <Label htmlFor="password">Share password</Label><Input id="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} /><Button type="submit">Unlock</Button>
     </form></>}
     {query.data && <><h1 className="text-2xl font-bold">{query.data.job.property_address}</h1><p>{query.data.job.job_ref}</p><p>{query.data.job.description}</p><p>Link expires {new Date(query.data.expires_at).toLocaleString()}</p>

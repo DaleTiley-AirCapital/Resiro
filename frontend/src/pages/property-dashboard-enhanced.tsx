@@ -40,6 +40,7 @@ export default function PropertyDashboardEnhanced() {
       const response=await fetch("/api/files",{method:"POST",body,headers:{Authorization:`Bearer ${localStorage.getItem("auth_token")}`}});
       if(!response.ok)throw new Error((await response.json()).error || "Upload failed");
       await queryClient.invalidateQueries({queryKey:[`/api/properties/${id}/documents`]});
+      await queryClient.invalidateQueries({queryKey:["/api/properties"]});
       toast({title:"Document uploaded"});
     }catch(e){fail(e);}finally{setBusy(false);}
   };
