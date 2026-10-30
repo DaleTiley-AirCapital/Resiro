@@ -151,17 +151,45 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
   if !message().is_empty(){p {role:"status","{message}"}}
  }}
 }
+fn asset_field(label:&str,value:String)->Element{
+ let shown=if value.trim().is_empty(){"Not recorded".to_string()}else{value};
+ rsx!{div {style:"padding:8px 0;border-bottom:1px solid #edf0f5",small {class:"muted","{label}"}div {"{shown}"}}}
+}
 #[component]
 fn Assets(session:Session,property_id:String)->Element{
  let items=use_resource(move||{let s=session.clone();let id=property_id.clone();async move{api::get(&s,&format!("/api/properties/{id}/assets")).await}});
- rsx!{h3 {"Furniture & assets"}p {class:"muted","Purchases and proposed items stay distinguishable. Source documents provide the evidence."}
+ let mut filter=use_signal(String::new);
+ rsx!{h3 {"Furniture & assets"}p {class:"muted","Purchases and proposed items stay distinguishable. Check the source before treating a candidate as something you own."}
+  input {r#type:"search",aria_label:"Search assets",placeholder:"Search furniture, equipment or suppliers…",oninput:move |e|filter.set(e.value())}
   match &*items.read_unchecked(){
-   Some(Ok(value))=>rsx!{if let Some(rows)=value.as_array(){for item in rows{
-    section {class:"card",h4 {"{text(item,\"name\")}"}p {"{text(item,\"room\")} · {text(item,\"category\")}"}
-     pre {class:"source-text","{serde_json::to_string_pretty(item.get(\"data\").unwrap_or(&Value::Null)).unwrap_or_default()}"}
-     p {class:"muted","Review: {text(item,\"review_status\")}"}
+   Some(Ok(value))=>{
+    let query=filter().to_lowercase();
+    let rows=value.as_array().into_iter().flatten().filter(|item|{
+     query.is_empty()||format!("{} {} {} {} {} {}",text(item,"name"),text(item,"category"),text(item,"room"),text(&item["data"],"vendor"),text(&item["data"],"make"),text(&item["data"],"model")).to_lowercase().contains(&query)
+    }).collect::<Vec<_>>();
+    rsx!{
+     p {class:"muted","{rows.len()} matching records"}
+     for item in rows.iter().take(100){
+      {let data=&item["data"];let state=match text(data,"document_state").as_str(){"purchased"=>"Purchase evidence · review needed","quoted"=>"Quotation · ownership unconfirmed","proposed"=>"Proposed item",_=>"Ownership needs confirmation"};
+       let total=text(data,"total_price");let unit=text(data,"unit_price");let currency=text(data,"currency");
+       let price=if !total.is_empty(){format!("{currency} {total} total")}else if !unit.is_empty(){format!("{currency} {unit} per item")}else{String::new()};
+       rsx!{section {class:"card",h4 {"{text(item,\"name\")}"}p {class:"muted","{text(item,\"category\")}"}p {class:"badge","{state}"}
+        {asset_field("Supplier",text(data,"vendor"))}
+        {asset_field("Price shown in the document",price)}
+        {asset_field("Quantity",text(data,"quantity"))}
+        {asset_field("Make / model",format!("{} {}",text(data,"make"),text(data,"model")).trim().to_string())}
+        {asset_field("Room",text(item,"room"))}
+        {asset_field("Purchase date",text(data,"purchase_date"))}
+        {asset_field("Serial number",text(data,"serial_number"))}
+        {asset_field("Warranty until",text(data,"warranty_until"))}
+        if !text(data,"quote").is_empty(){details {summary {"Source quote"}p {class:"source-text","{text(data,\"quote\")}"}}}
+       }}
+      }
+     }
+     if rows.len()>100{p {class:"muted","Showing the first 100 matches. Search to narrow the list."}}
+     if rows.is_empty(){p {"No matching assets yet. Upload a receipt or furniture invoice to start."}}
     }
-   }if rows.is_empty(){p {"No assets have been identified yet. Upload a receipt or furniture invoice to start."}}}},
+   },
    Some(Err(e))=>rsx!{p {role:"alert","{e}"}},
    None=>rsx!{p {"Loading assets…"}}
   }

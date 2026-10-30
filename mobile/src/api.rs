@@ -4,7 +4,7 @@ use serde_json::Value;
 pub const BASE: &str = "https://resiro-web-production.up.railway.app";
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 pub struct Session { pub token: String, pub csrf: String, pub user: Value }
-pub fn text(v: &Value, key: &str) -> String { v.get(key).and_then(Value::as_str).unwrap_or("").to_owned() }
+pub fn text(v:&Value,key:&str)->String{match v.get(key){Some(Value::String(s))=>s.clone(),Some(Value::Number(n))=>n.to_string(),Some(Value::Bool(b))=>b.to_string(),_=>String::new()}}
 async fn response(r: reqwest::Response) -> Result<Value,String> {
     let status=r.status(); let value=r.json::<Value>().await.map_err(|_| "The server returned an unreadable response.".to_string())?;
     if status.is_success() { Ok(value) } else { Err(value.get("error").and_then(Value::as_str).unwrap_or("Request failed. Please try again.").to_string()) }

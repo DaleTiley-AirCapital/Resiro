@@ -20,11 +20,15 @@ const {_android:android}=require(process.env.NATIVE_PLAYWRIGHT_PATH);
   await page.locator('button.doc-card').first().click();
   await page.getByRole('button',{name:'Documents',exact:true}).click();
   await page.locator('button.doc-card').filter({hasText:'Demo bed receipt.txt'}).first().waitFor();
+  await page.getByRole('button',{name:'Assets',exact:true}).click();
+  await page.getByRole('heading',{name:'Furniture & assets',exact:true}).waitFor();
+  await page.getByRole('heading').filter({hasText:/Atlas.*Bed/i}).first().waitFor();
+  fs.writeFileSync('mobile/previews/Resiro-android-assets.png',cp.execFileSync('adb',['exec-out','screencap','-p']));
   await page.getByRole('button',{name:'Sign out',exact:true}).click();
   await login('info@millenniumroofing.co.za','supplier123');
   await page.getByRole('heading',{name:'Supplier dashboard',exact:true}).waitFor();
   fs.writeFileSync('mobile/previews/Resiro-android-supplier.png',cp.execFileSync('adb',['exec-out','screencap','-p']));
-  fs.writeFileSync('mobile/previews/android-launch-check.json',JSON.stringify({installed:true,owner_login:true,owner_dashboard:true,documents_load:true,supplier_login:true,supplier_dashboard:true}));
+  fs.writeFileSync('mobile/previews/android-launch-check.json',JSON.stringify({installed:true,owner_login:true,owner_dashboard:true,documents_load:true,assets_load:true,supplier_login:true,supplier_dashboard:true}));
   console.log('Native Android owner login, documents and supplier login passed.');
  }catch(error){
   fs.writeFileSync('mobile/previews/Resiro-android-failure.png',cp.execFileSync('adb',['exec-out','screencap','-p']));
