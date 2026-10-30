@@ -16,8 +16,9 @@ pub fn routes()->Router<App>{
  .route("/api/notifications",get(notices_json))
 }
 fn parse_time(s:&str)->Result<DateTime<Utc>>{
- let text=if s.ends_with('Z')||s.chars().rev().take(6).collect::<String>().contains('+'){s.to_owned()}else{format!("{s}:00+02:00")};
- DateTime::parse_from_rfc3339(&text).map(|d|d.with_timezone(&Utc)).map_err(|_|bad("Choose a valid date and time"))
+ if let Ok(value)=DateTime::parse_from_rfc3339(s){return Ok(value.with_timezone(&Utc));}
+ let parsed=chrono::NaiveDateTime::parse_from_str(s,"%Y-%m-%dT%H:%M").or_else(|_|chrono::NaiveDateTime::parse_from_str(s,"%Y-%m-%dT%H:%M:%S")).map_err(|_|bad("Choose a valid date and time"))?;
+ Ok((parsed-Duration::hours(2)).and_utc())
 }
 fn local(t:DateTime<Utc>)->String{(t+Duration::hours(2)).format("%Y-%m-%dT%H:%M").to_string()}
 async fn notify(app:&App,org:Uuid,key:&str,title:&str,message:&str,path:&str)->Result<()>{
@@ -55,7 +56,7 @@ pub async fn reminder_action(State(app):State<App>,headers:HeaderMap,Path(id):Pa
  let mut status="open";
  match data.get("action").map(String::as_str).unwrap_or(""){
   "complete"=>{let recurrence=row["recurrence"].as_str().unwrap_or("none");if recurrence=="none"{status="completed";}else{
-   while due<=Utc::now(){due=match recurrence{"daily"=>due+Duration::days(1),"weekly"=>due+Duration::days(7),"monthly"=>due.checked_add_months(chrono::Months::new(1)).ok_or_else(||bad("Date is out of range"))?,_=>return Err(bad("Invalid recurrence"))};}
+   loop{due=match recurrence{"daily"=>due+Duration::days(1),"weekly"=>due+Duration::days(7),"monthly"=>due.checked_add_months(chrono::Months::new(1)).ok_or_else(||bad("Date is out of range"))?,_=>return Err(bad("Invalid recurrence"))};if due>Utc::now(){break;}}
   }},
   "cancel"=>status="cancelled",
   "reschedule"=>due=parse_time(data.get("due_at").map(String::as_str).unwrap_or(""))?,
@@ -141,7 +142,7 @@ pub async fn add_job(State(app):State<App>,headers:HeaderMap,Form(data):Form<Has
 pub async fn notify_due(app:App){loop{
  let result:Result<()>=async{
   let mut tx=app.db.begin().await?;
-  let rows:Vec<Value>=sqlx::query_scalar("UPDATE resiro.reminders SET notified_due=due_at WHERE id IN(SELECT id FROM resiro.reminders WHERE status='open' AND due_at<=now() AND notified_due IS DISTINCT FROM due_at FOR UPDATE SKIP LOCKED LIMIT 100) RETURNING to_jsonb(resiro.reminders)").fetch_all(&mut *tx).await?;
+  let rows:Vec<Value>=sqlx::query_scalar("UPDATE resiro.reminders AS due SET notified_due=due_at WHERE id IN(SELECT id FROM resiro.reminders WHERE status='open' AND due_at<=now() AND notified_due IS DISTINCT FROM due_at FOR UPDATE SKIP LOCKED LIMIT 100) RETURNING to_jsonb(due)").fetch_all(&mut *tx).await?;
   for r in rows{let org:Uuid=v(&r,"org_id").parse().unwrap();let key=format!("reminder:{}:{}",v(&r,"id"),v(&r,"due_at"));
    sqlx::query("INSERT INTO resiro.notifications(id,org_id,source_key,title,message,path) VALUES($1,$2,$3,'Reminder due',$4,$5) ON CONFLICT(source_key) DO NOTHING")
     .bind(Uuid::new_v4()).bind(org).bind(key).bind(v(&r,"title")).bind(format!("/properties/{}?tab=maintenance",v(&r,"property_id"))).execute(&mut *tx).await?;

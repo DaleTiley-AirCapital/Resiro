@@ -110,7 +110,7 @@ pub async fn run(app:App){
 }
 async fn process_one(app:&App)->Result<bool>{
  sqlx::query("UPDATE resiro.documents SET status='queued',claimed_at=NULL WHERE status IN ('reading','analyzing') AND claimed_at<now()-interval '20 minutes'").execute(&app.db).await?;
- let row:Option<Value>=sqlx::query_scalar("UPDATE resiro.documents SET status='reading',attempts=attempts+1,claimed_at=now() WHERE id=(SELECT id FROM resiro.documents WHERE status='queued' AND attempts<3 ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING to_jsonb(resiro.documents)")
+ let row:Option<Value>=sqlx::query_scalar("UPDATE resiro.documents AS claimed SET status='reading',attempts=attempts+1,claimed_at=now() WHERE id=(SELECT id FROM resiro.documents WHERE status='queued' AND attempts<4 AND next_attempt_at<=now() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING to_jsonb(claimed)")
   .fetch_optional(&app.db).await?;
  let Some(doc)=row else{return Ok(false)};
  let id=Uuid::parse_str(doc["id"].as_str().unwrap()).map_err(|e|anyhow::anyhow!(e))?;
@@ -118,7 +118,7 @@ async fn process_one(app:&App)->Result<bool>{
   Ok(())=>{},
   Err(e)=>{
    tracing::warn!(document_id=%id,error=%e,"Document processing failed");
-   sqlx::query("UPDATE resiro.documents SET status='failed',error=$1,claimed_at=NULL WHERE id=$2").bind(e.to_string().chars().take(500).collect::<String>()).bind(id).execute(&app.db).await?;
+   sqlx::query("UPDATE resiro.documents SET status=CASE WHEN attempts<4 THEN 'queued' ELSE 'failed' END,error=$1,claimed_at=NULL,next_attempt_at=now()+make_interval(secs=>60*attempts) WHERE id=$2").bind(e.to_string().chars().take(500).collect::<String>()).bind(id).execute(&app.db).await?;
   }
  }Ok(true)
 }
@@ -126,7 +126,9 @@ async fn process_document(app:&App,doc:&Value)->Result<()>{
  let id:Uuid=doc["id"].as_str().unwrap().parse().unwrap();let pid:Uuid=doc["property_id"].as_str().unwrap().parse().unwrap();let org:Uuid=doc["org_id"].as_str().unwrap().parse().unwrap();
  let bytes=app.store.get(&app.http,doc["object_key"].as_str().unwrap()).await?;
  if crate::storage::hash(&bytes)!=doc["sha256"].as_str().unwrap(){return Err(Error::Other(anyhow::anyhow!("Stored checksum does not match the source"))); }
- let mut extracted=extract(doc["name"].as_str().unwrap(),&bytes).await?;
+ let mut extracted=if let Some(text)=doc["extracted_text"].as_str().filter(|s|!s.is_empty()){
+  Extracted{text:text.to_owned(),attachments:Vec::new(),method:doc["extraction"]["method"].as_str().unwrap_or("cached").to_owned(),limitations:doc["extraction"]["limitations"].as_array().into_iter().flatten().filter_map(|v|v.as_str().map(str::to_owned)).collect()}
+ }else{extract(doc["name"].as_str().unwrap(),&bytes).await?};
  let user:auth::User=sqlx::query_as("SELECT id,org_id,email,name,role,''::text csrf FROM resiro.users WHERE org_id=$1 ORDER BY created_at LIMIT 1").bind(org).fetch_one(&app.db).await?;
  for (name,body) in std::mem::take(&mut extracted.attachments){
   if crate::storage::excluded(&name){extracted.limitations.push(format!("Excluded native drawing attachment: {name}"));continue;}
@@ -156,7 +158,7 @@ async fn process_document(app:&App,doc:&Value)->Result<()>{
    .bind(Uuid::new_v4()).bind(pid).bind(org).bind(name).bind(asset["category"].as_str().unwrap_or("Contents")).bind(asset).bind(id).execute(&mut *tx).await?;
  }
  sqlx::query("UPDATE resiro.documents SET status=$1,extraction=extraction||$2,processed_at=now(),claimed_at=NULL,error=NULL WHERE id=$3")
-  .bind(if extracted.limitations.is_empty(){"processed"}else{"needs_review"})
+  .bind(if extracted.limitations.is_empty()&&analysis["limitations"].as_array().map_or(true,|v|v.is_empty()){"processed"}else{"needs_review"})
   .bind(json!({"analysis":analysis,"model":app.model})).bind(id).execute(&mut *tx).await?;
  tx.commit().await?;Ok(())
 }

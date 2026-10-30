@@ -37,17 +37,22 @@ pub async fn user(app:&App,headers:&HeaderMap)->Result<User>{
 }
 pub fn csrf(user:&User,value:&str)->Result<()>{if safe_eq(&user.csrf,value)&&!user.csrf.is_empty(){Ok(())}else{Err(Error::Message(StatusCode::FORBIDDEN,"Refresh this page before saving.".into()))}}
 pub fn api_csrf(app:&App,user:&User,headers:&HeaderMap,value:Option<&str>)->Result<()>{
- if import_ok(app,headers)||headers.get(header::AUTHORIZATION).is_some(){return Ok(());}
+ if import_ok(app,headers)||headers.get(header::AUTHORIZATION).and_then(|h|h.to_str().ok()).and_then(|s|s.strip_prefix("Bearer ")).map_or(false,|s|!s.is_empty()){return Ok(());}
  csrf(user,value.or_else(||headers.get("x-csrf-token").and_then(|v|v.to_str().ok())).unwrap_or(""))
 }
 #[derive(Deserialize)]pub struct Login{email:String,password:String}
 async fn credentials(app:&App,email:&str,password:&str)->Result<(User,String)>{
  let email=email.trim().to_lowercase();
+ if email.len()>254||password.len()>72{return Err(bad("Invalid email or password"));}
+ let key=crate::storage::hash(email.as_bytes());
+ let attempts:i32=sqlx::query_scalar("INSERT INTO resiro.auth_attempts(key,attempts) VALUES($1,1) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN resiro.auth_attempts.window_start<now()-interval '15 minutes' THEN 1 ELSE resiro.auth_attempts.attempts+1 END,window_start=CASE WHEN resiro.auth_attempts.window_start<now()-interval '15 minutes' THEN now() ELSE resiro.auth_attempts.window_start END RETURNING attempts").bind(&key).fetch_one(&app.db).await?;
+ if attempts>12{return Err(Error::Message(StatusCode::TOO_MANY_REQUESTS,"Too many sign-in attempts. Try again in 15 minutes.".into()));}
  let record:Option<(Uuid,String)>=sqlx::query_as("SELECT id,password_hash FROM resiro.users WHERE email=$1").bind(&email).fetch_optional(&app.db).await?;
  let password=password.to_string();
  let (id,hash)=record.unwrap_or((Uuid::nil(),"$2b$10$W7/NKRBz8tQ1S1b6HtPSZeU9AjDCqG./97LNIGAwKLHQsVJG/IjeO".into()));
  let valid=tokio::task::spawn_blocking(move||bcrypt::verify(password, &hash).unwrap_or(false)).await.map_err(|e|anyhow::anyhow!(e))?;
  if !valid||id.is_nil(){return Err(Error::Message(StatusCode::UNAUTHORIZED,"Invalid email or password".into()));}
+ sqlx::query("DELETE FROM resiro.auth_attempts WHERE key=$1").bind(&key).execute(&app.db).await?;
  let token=random();let csrf=random();
  sqlx::query("INSERT INTO resiro.sessions(token_hash,user_id,csrf,expires_at) VALUES($1,$2,$3,now()+interval '7 days')")
   .bind(crate::storage::hash(token.as_bytes())).bind(id).bind(&csrf).execute(&app.db).await?;
@@ -90,4 +95,11 @@ pub async fn activate(State(app):State<App>,Form(form):Form<HashMap<String,Strin
  sqlx::query("UPDATE resiro.users SET password_hash=$1 WHERE id=$2").bind(hash).bind(id).execute(&mut *tx).await?;
  sqlx::query("DELETE FROM resiro.sessions WHERE user_id=$1").bind(id).execute(&mut *tx).await?;tx.commit().await?;
  Ok(Redirect::to("/login?activated=1").into_response())
+}
+
+pub async fn logout_json(State(app):State<App>,headers:HeaderMap,Json(input):Json<serde_json::Value>)->Result<Json<serde_json::Value>>{
+ let user=user(&app,&headers).await?;api_csrf(&app,&user,&headers,input["csrf"].as_str())?;
+ let token=headers.get(header::AUTHORIZATION).and_then(|h|h.to_str().ok()).and_then(|s|s.strip_prefix("Bearer ")).ok_or_else(||bad("Bearer session required"))?;
+ sqlx::query("DELETE FROM resiro.sessions WHERE token_hash=$1 AND user_id=$2").bind(crate::storage::hash(token.as_bytes())).bind(user.id).execute(&app.db).await?;
+ Ok(Json(serde_json::json!({"signed_out":true})))
 }

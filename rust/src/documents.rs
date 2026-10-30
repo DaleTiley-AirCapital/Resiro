@@ -45,12 +45,12 @@ pub async fn store_one(app:&App,user:&auth::User,pid:Uuid,name:&str,bytes:Vec<u8
   let key=format!("{}/{}/{hash}",user.org_id,pid);let size=bytes.len() as i64;
   app.store.put(&app.http,&key,bytes).await?;
   sqlx::query("INSERT INTO resiro.documents(id,property_id,org_id,name,title,category,sha256,bytes,mime,bucket,object_key) VALUES($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10)")
-   .bind(id).bind(pid).bind(user.org_id).bind(name).bind(category(path)).bind(&hash).bind(size)
+   .bind(id).bind(pid).bind(user.org_id).bind(name).bind(category(&format!("{root}/{path}/{name}"))).bind(&hash).bind(size)
    .bind(mime(name)).bind(app.store.bucket.name()).bind(key).execute(&mut *tx).await?;
  }
  sqlx::query("INSERT INTO resiro.document_sources(id,document_id,source_root,source_path,parent_id,modified_at,source_sha256) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(document_id,source_root,source_path) DO NOTHING")
   .bind(Uuid::new_v4()).bind(id).bind(root).bind(path).bind(parent).bind(modified).bind(source_hash).execute(&mut *tx).await?;
- tx.commit().await?;Ok((id,exists.is_some()))
+ tx.commit().await?;if exists.is_none(){crate::event(app,user,Some(pid),"document","Document uploaded",json!({"document_id":id,"name":name,"category":category(&format!("{root}/{path}/{name}"))})).await?;}Ok((id,exists.is_some()))
 }
 pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multipart)->Result<Response>{
  let user=auth::user(&app,&headers).await?;
@@ -60,7 +60,7 @@ pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multip
   if let Some(name)=field.file_name(){
    let name=name.replace('\\',"/").rsplit('/').next().unwrap_or("document").chars().filter(|c|!c.is_control()).take(240).collect::<String>();
    if storage::excluded(&name){return Err(bad("This drawing/design file type is excluded"));}
-   let bytes=field.bytes().await.map_err(|_|bad("File exceeds upload limits"))?.to_vec();files.push((name,bytes));
+   let bytes=field.bytes().await.map_err(|_|bad("File exceeds upload limits"))?.to_vec();if !name.is_empty()&&!bytes.is_empty(){files.push((name,bytes));}
   }else{let value=field.text().await.map_err(|_|bad("Invalid upload metadata"))?;if value.len()>4096{return Err(bad("Upload metadata is too long"));}fields.insert(key,value);}
  }
  auth::api_csrf(&app,&user,&headers,fields.get("csrf").map(String::as_str))?;
@@ -102,7 +102,7 @@ pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multip
 }
 pub async fn list(State(app):State<App>,headers:HeaderMap,Path(pid):Path<Uuid>)->Result<Json<Value>>{
  let user=auth::user(&app,&headers).await?;property(&app,&user,pid).await?;
- let rows:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(d)-'object_key'-'bucket'-'extracted_text' FROM resiro.documents d WHERE property_id=$1 AND org_id=$2 ORDER BY category,name")
+ let rows:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(d)-'object_key'-'bucket'-'extracted_text'-'extraction' FROM resiro.documents d WHERE property_id=$1 AND org_id=$2 ORDER BY category,name")
   .bind(pid).bind(user.org_id).fetch_all(&app.db).await?;Ok(Json(json!(rows)))
 }
 pub async fn facts(State(app):State<App>,headers:HeaderMap,Path(pid):Path<Uuid>)->Result<Json<Value>>{
@@ -117,7 +117,7 @@ pub async fn search(State(app):State<App>,headers:HeaderMap,Path(pid):Path<Uuid>
 }
 pub async fn search_rows(app:&App,user:&auth::User,pid:Uuid,q:&str)->Result<Vec<Value>>{
  let q=q.chars().take(300).collect::<String>();if q.trim().is_empty(){return Ok(Vec::new());}
- Ok(sqlx::query_scalar("SELECT jsonb_build_object('id',id,'name',name,'category',category,'status',status,'excerpt',left(extracted_text,1800),'rank',ts_rank(to_tsvector('english',name||' '||extracted_text),websearch_to_tsquery('english',$3))) FROM resiro.documents WHERE property_id=$1 AND org_id=$2 AND (to_tsvector('english',name||' '||extracted_text) @@ websearch_to_tsquery('english',$3) OR name ILIKE '%'||$3||'%') ORDER BY ts_rank(to_tsvector('english',name||' '||extracted_text),websearch_to_tsquery('english',$3)) DESC LIMIT 20")
+ Ok(sqlx::query_scalar("SELECT jsonb_build_object('id',id,'name',name,'title',title,'category',category,'status',status,'excerpt',left(extracted_text,1800),'rank',ts_rank(to_tsvector('english',name||' '||extracted_text),websearch_to_tsquery('english',$3))) FROM resiro.documents WHERE property_id=$1 AND org_id=$2 AND (to_tsvector('english',name||' '||extracted_text) @@ websearch_to_tsquery('english',$3) OR name ILIKE '%'||$3||'%') ORDER BY ts_rank(to_tsvector('english',name||' '||extracted_text),websearch_to_tsquery('english',$3)) DESC LIMIT 20")
   .bind(pid).bind(user.org_id).bind(q).fetch_all(&app.db).await?)
 }
 pub async fn download(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>)->Result<Response>{
