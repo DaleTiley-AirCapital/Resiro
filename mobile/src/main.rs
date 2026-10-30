@@ -97,7 +97,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
            Ok(v)=>document_text.set(text(&v,"extracted_text")),Err(e)=>document_text.set(e)
           }
          }
-        },strong {"{text(&d,\"title\")}"}small {"{text(&d,\"category\")} · {text(&d,\"status\")}"}small {"{text(&d,\"name\")}"}}}
+        },strong {"{text(&d,\"title\")}"}small {"{text(&d,\"category\")} · {text(&d,\"status\")}"}small {"{text(&d,\"name\")}"}}}}
        }if rows.is_empty(){p {"No matching documents."}}}
       },
       Some(Err(e))=>rsx!{p {role:"alert","{e}"}},
@@ -133,7 +133,7 @@ fn Workspace(session:Session,onlogout:EventHandler<()>)->Element{
      if let Some(rows)=value.as_array(){for p in rows.iter().cloned(){
       {let item=p.clone();rsx!{button {class:"doc-card",onclick:move |_|property.set(Some(item.clone())),
        strong {"{text(&p,\"name\")}"}small {"{text(&p,\"address\")}"}
-      }}}
+      }}}}
       if rows.is_empty(){p {"No properties are linked to this account yet."}}
      }
     },

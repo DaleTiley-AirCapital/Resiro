@@ -22,8 +22,8 @@ pub async fn post(s: &Session,path: &str,value: Value) -> Result<Value,String> {
     response(r).await
 }
 pub async fn upload(s: &Session,property: &str,name: String,bytes: Vec<u8>) -> Result<Value,String> {
-    let part=reqwest::multipart::Part::bytes(bytes).file_name(name);
-    let form=reqwest::multipart::Form::new().text("property_id",property.to_string()).text("source_root","Mobile uploads").text("source_path","").part("file",part);
+    let source_name=name.clone();let part=reqwest::multipart::Part::bytes(bytes).file_name(name);
+    let form=reqwest::multipart::Form::new().text("property_id",property.to_string()).text("source_root","Mobile uploads").text("source_path",source_name).part("file",part);
     let r=reqwest::Client::new().post(format!("{BASE}/api/documents")).bearer_auth(&s.token).multipart(form).send().await.map_err(|_|"Upload interrupted. Please try again.".to_string())?;
     response(r).await
 }
