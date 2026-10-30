@@ -60,3 +60,14 @@ pub async fn supplier(State(app):State<App>,headers:HeaderMap)->Result<Response>
  let body=crate::workflows::supplier_section(&app,&user).await?;
  Ok(layout(Some(&user),"Supplier console",body).into_response())
 }
+
+pub async fn assets_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>)->Result<Json<Value>>{
+ let user=auth::user(&app,&headers).await?;property(&app,&user,id).await?;
+ let rows:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(a) FROM resiro.assets a WHERE property_id=$1 AND org_id=$2 ORDER BY created_at DESC")
+ .bind(id).bind(user.org_id).fetch_all(&app.db).await?;Ok(Json(json!(rows)))
+}
+pub async fn activity_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>)->Result<Json<Value>>{
+ let user=auth::user(&app,&headers).await?;property(&app,&user,id).await?;
+ let rows:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(e) FROM resiro.events e WHERE property_id=$1 AND org_id=$2 ORDER BY created_at DESC LIMIT 200")
+ .bind(id).bind(user.org_id).fetch_all(&app.db).await?;Ok(Json(json!(rows)))
+}

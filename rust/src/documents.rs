@@ -167,3 +167,10 @@ pub async fn review_fact(State(app):State<App>,headers:HeaderMap,Path(id):Path<U
  Ok(Redirect::to(&format!("/properties/{}?tab=overview",pid.ok_or_else(missing)?)))
 }
 #[cfg(test)]mod tests{use super::*;#[test]fn classify(){assert_eq!(category("Furniture/Bed receipt.pdf"),"Furniture & Contents");assert_eq!(category("Bank Documents/Bond.pdf"),"Finance & Bond");}}
+
+pub async fn text_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>)->Result<Json<Value>>{
+ let user=auth::user(&app,&headers).await?;
+ let row:Option<Value>=sqlx::query_scalar("SELECT jsonb_build_object('id',id,'name',name,'title',title,'category',category,'status',status,'extracted_text',extracted_text) FROM resiro.documents WHERE id=$1 AND org_id=$2")
+ .bind(id).bind(user.org_id).fetch_optional(&app.db).await?;
+ Ok(Json(row.ok_or_else(missing)?))
+}

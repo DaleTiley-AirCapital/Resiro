@@ -10,12 +10,13 @@ FROM rust:1.90-bookworm AS build
 WORKDIR /src
 ENV CARGO_BUILD_JOBS=2
 COPY rust/ .
-RUN cargo test --release && cargo build --release
+RUN --mount=type=cache,id=resiro-registry,target=/usr/local/cargo/registry --mount=type=cache,id=resiro-target,target=/src/target cargo test --release && cargo build --release && cp target/release/resiro /src/resiro
 
 FROM debian:bookworm-slim
 RUN apt-get update -qq && apt-get install -y --no-install-recommends ca-certificates poppler-utils tesseract-ocr tesseract-ocr-afr && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /src/target/release/resiro /app/resiro
+COPY --from=build /src/resiro /app/resiro
+COPY --from=build /src/Cargo.lock /app/Cargo.lock
 COPY --from=marketing /site/dist /app/marketing
 COPY rust/public /app/public
 COPY frontend/src/assets/rezdna-logo.png /app/public/logo.png
