@@ -1,3 +1,4 @@
+import ActivityInbox from "@/components/workflows/activity-inbox";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -264,6 +265,7 @@ export default function Dashboard() {
       </div>
       
       <main className="flex-1 p-8 overflow-auto bg-gray-50">
+        <ActivityInbox />
         {showPropertiesDashboard ? <IndividualDashboard /> : <CompanyDashboard />}
       </main>
     </div>

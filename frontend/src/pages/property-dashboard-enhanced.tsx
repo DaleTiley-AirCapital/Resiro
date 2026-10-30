@@ -1,3 +1,7 @@
+import AiAnalysisPanel from "@/components/workflows/ai-analysis-panel";
+import ReminderPanel from "@/components/workflows/reminder-panel";
+import BookingPanel from "@/components/workflows/booking-panel";
+import ActivityInbox from "@/components/workflows/activity-inbox";
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -14,6 +18,7 @@ const SAMPLES=["Sample_Title_Deed.pdf","Sample_Electrical_CoC.pdf","Sample_PIRB_
 export default function PropertyDashboardEnhanced() {
   const { id }=useParams(); const [,navigate]=useLocation(); const {toast}=useToast();
   const isDemo=id==="demo";
+  const [tab,setTab]=useState("vault");const [reminderDraft,setReminderDraft]=useState<any>(null);const [bookingDraft,setBookingDraft]=useState<any>(null);
   const [busy,setBusy]=useState(false); const [shareDoc,setShareDoc]=useState<any>(null); const [shareUrl,setShareUrl]=useState("");
   const propertyQuery=useQuery<any>({queryKey:[`/api/properties/${id}`],enabled:!isDemo});
   const documentsQuery=useQuery<any[]>({queryKey:[`/api/properties/${id}/documents`],enabled:!isDemo});
@@ -50,7 +55,8 @@ export default function PropertyDashboardEnhanced() {
     <Button variant="outline" onClick={()=>navigate("/app")}>Back to Dashboard</Button>
     <header className="my-6 flex flex-wrap items-center justify-between gap-4"><div><h1 className="text-3xl font-bold">{property.name}</h1><p>{property.address}</p></div><Badge variant="outline">{property.dnaId}</Badge></header>
     {isDemo && <p className="p-3 mb-4 border rounded bg-blue-50">Sample property and documents for exploring the dashboard. These are illustrative, unverified examples. Add your own property to save documents.</p>}
-    <Tabs defaultValue="vault"><TabsList className="flex w-full justify-start overflow-x-auto h-auto">{[["vault","Vault"],["policy","Policy Check"],["actions","Actions"],["vendors","Vendors"],["services","Services"]].map(([value,label])=><TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>
+    <ActivityInbox />
+    <Tabs value={tab} onValueChange={setTab}><TabsList className="flex w-full justify-start overflow-x-auto h-auto">{[["vault","Vault"],["policy","Policy Check"],["actions","Actions"],["vendors","Vendors"],["services","Services"]].map(([value,label])=><TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>
       <TabsContent value="vault"><Card><CardHeader><CardTitle>Document Vault</CardTitle></CardHeader><CardContent className="space-y-4">
         {isDemo?<Button onClick={()=>navigate("/properties/new")}>Add Your Own Property</Button>:<div><Label htmlFor="property-upload">Upload document (up to 10 MB)</Label><Input id="property-upload" type="file" disabled={busy} onChange={e=>{const f=e.target.files?.[0];if(f)void upload(f);e.target.value="";}} /></div>}
         {documentsQuery.error && <p role="alert">Documents could not be loaded. Refresh to retry.</p>}
@@ -60,10 +66,10 @@ export default function PropertyDashboardEnhanced() {
         </div></div>{!isDemo && <p className="text-xs break-all">SHA-256: {doc.sha256}</p>}</div>)}
         {!documents.length && !documentsQuery.isLoading && <p>No documents uploaded yet.</p>}
       </CardContent></Card></TabsContent>
-      <TabsContent value="policy"><Card><CardHeader><CardTitle>Insurance Policy Compliance</CardTitle></CardHeader><CardContent className="space-y-4"><p>Not evaluated. Automated policy analysis is not connected in this version.</p><p>Uploaded documents have not been verified for insurance, legal or regulatory compliance.</p>{isDemo && <a className="text-blue-700 underline" href="/demo_docs/Homeowners_Policy_Sample.pdf" target="_blank" rel="noreferrer">View sample homeowners policy</a>}</CardContent></Card></TabsContent>
-      <TabsContent value="actions"><Card><CardHeader><CardTitle>Actions &amp; Reminders</CardTitle></CardHeader><CardContent><p>Document reminders and scheduling are not connected in this version. No reminders have been scheduled.</p></CardContent></Card></TabsContent>
-      <TabsContent value="vendors"><Card><CardHeader><CardTitle>Connected Vendors</CardTitle></CardHeader><CardContent><p>No vendors are connected to this property. Vendor invitations are not connected in this version.</p></CardContent></Card></TabsContent>
-      <TabsContent value="services"><Card><CardHeader><CardTitle>Property Services</CardTitle></CardHeader><CardContent><p>Provider booking and consultations are not connected in this version. No service request has been sent.</p></CardContent></Card></TabsContent>
+      <TabsContent value="policy">{isDemo?<Card><CardContent className="p-6"><p>To run an analysis on saved documents, add your own property and upload a searchable PDF or text document.</p><Button onClick={()=>navigate("/properties/new")}>Add Your Own Property</Button></CardContent></Card>:<AiAnalysisPanel propertyId={id!} documents={documents} onReminder={draft=>{setReminderDraft({...draft,key:Date.now()});setTab("actions");}} onBooking={draft=>{setBookingDraft({...draft,key:Date.now()});setTab("services");}} />}</TabsContent>
+      <TabsContent value="actions">{isDemo?<Card><CardContent className="p-6"><p>Add your own property to create reminders and receive due notifications.</p><Button onClick={()=>navigate("/properties/new")}>Add Your Own Property</Button></CardContent></Card>:<ReminderPanel key={reminderDraft?.key || id} propertyId={id!} draft={reminderDraft} />}</TabsContent>
+      <TabsContent value="vendors"><Card><CardHeader><CardTitle>Connected Vendors</CardTitle></CardHeader><CardContent><p>Find suppliers who have enabled bookings in the Services tab. Your service request shares the property address and the details you choose to provide.</p><Button onClick={()=>setTab("services")}>Find a supplier</Button></CardContent></Card></TabsContent>
+      <TabsContent value="services">{isDemo?<Card><CardContent className="p-6"><p>Add your own property to request a service appointment with an available supplier.</p><Button onClick={()=>navigate("/properties/new")}>Add Your Own Property</Button></CardContent></Card>:<BookingPanel key={bookingDraft?.key || id} propertyId={id!} draft={bookingDraft} />}</TabsContent>
     </Tabs>
     {shareDoc && <Card className="mt-6"><CardHeader><CardTitle>Share {shareDoc.name}</CardTitle></CardHeader><CardContent>
       <form className="space-y-3" onSubmit={async e=>{e.preventDefault();setBusy(true);try{

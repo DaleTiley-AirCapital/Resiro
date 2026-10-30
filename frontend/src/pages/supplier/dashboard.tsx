@@ -1,3 +1,5 @@
+import BookingPanel from "@/components/workflows/booking-panel";
+import ActivityInbox from "@/components/workflows/activity-inbox";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -70,7 +72,7 @@ export default function SupplierDashboard() {
   const submit = (event: any, path: string, extra: any = {}) => {
     event.preventDefault();
     mutation.mutate({ method: path.endsWith("jobs") || path.endsWith("templates") ? "POST" : "PUT",
-      path, data: { ...Object.fromEntries(new FormData(event.currentTarget)), ...extra } });
+      path, data: { ...Object.fromEntries(new FormData(event.currentTarget)), ...(path.endsWith("/profile")?{accept_bookings:new FormData(event.currentTarget).get("accept_bookings")==="on"}:{}), ...extra } });
   };
   if (user?.userType !== "supplier") return <main className="p-8"><h1>Supplier access required</h1><Button onClick={() => navigate("/app")}>Back to dashboard</Button></main>;
   const errors = [profileQuery, jobsQuery, templatesQuery, documentsQuery, settingsQuery].some(q => q.isError);
@@ -81,9 +83,10 @@ export default function SupplierDashboard() {
     </header>
     {user.id === "00000000-0000-0000-0000-000000000002" && <p className="p-3 mb-4 bg-blue-50 border rounded">Shared demo account. Saved changes are visible to other demo visitors. Use sample documents only.</p>}
     {errors && <p role="alert" className="p-4 text-red-700">Supplier data could not be loaded. <Button variant="outline" onClick={() => queryClient.invalidateQueries()}>Retry</Button></p>}
+    <ActivityInbox />
     <Tabs value={tab} onValueChange={setTab}>
       <TabsList className="flex w-full justify-start overflow-x-auto h-auto">
-        {["profile","insurance","templates","jobs","settings"].map(t => <TabsTrigger key={t} value={t} className="capitalize">{t}</TabsTrigger>)}
+        {["profile","insurance","templates","jobs","bookings","settings"].map(t => <TabsTrigger key={t} value={t} className="capitalize">{t}</TabsTrigger>)}
       </TabsList>
       <TabsContent value="profile"><Card><CardHeader><CardTitle>Business Profile</CardTitle><CardDescription>Your business information and branding</CardDescription></CardHeader><CardContent>
         {profileQuery.isLoading ? <p>Loading profile...</p> : <form key={JSON.stringify(profile)} onSubmit={e => submit(e, "/api/supplier/profile")} className="space-y-4">
@@ -91,6 +94,7 @@ export default function SupplierDashboard() {
             <div key={name}><Label htmlFor={name}>{label}</Label><Input id={name} name={name} required={name === "company_name"} type={name === "email" ? "email" : "text"} defaultValue={profile?.[name] || ""} /></div>)}</div>
           <div><Label htmlFor="business-description">Business Description</Label><Textarea id="business-description" name="description" defaultValue={profile?.description || ""} /></div>
           <div><Label htmlFor="specialties">Specialties (comma-separated)</Label><Input id="specialties" name="specialties" defaultValue={profile?.specialties?.join(", ") || ""} /></div>
+          <label className="flex items-start gap-3"><input type="checkbox" name="accept_bookings" defaultChecked={profile?.accept_bookings ?? user.id==="00000000-0000-0000-0000-000000000002"} /><span>Accept booking requests and show my business name and specialties in the supplier directory.</span></label>
           <Button disabled={mutation.isPending} type="submit">Save Profile</Button>
         </form>}
       </CardContent></Card></TabsContent>
@@ -138,6 +142,7 @@ export default function SupplierDashboard() {
           {shareUrl && <div><Label htmlFor="share-url">Share link</Label><Input id="share-url" value={shareUrl} readOnly /><a className="text-blue-700 underline" href={shareUrl} target="_blank" rel="noreferrer">Open shared job</a></div>}
         </form>}
       </CardContent></Card></TabsContent>
+      <TabsContent value="bookings"><BookingPanel supplier /></TabsContent>
       <TabsContent value="settings"><Card><CardHeader><CardTitle>Settings</CardTitle><CardDescription>Choose when newly generated share links expire. Passwords can be added when creating a link.</CardDescription></CardHeader><CardContent>
         <form key={settingsQuery.data?.expire_after_days} className="space-y-4" onSubmit={e => submit(e,"/api/supplier/settings")}>
           <Label htmlFor="expire_after_days">Share expiry (days)</Label><Input id="expire_after_days" type="number" min="1" max="30" name="expire_after_days" defaultValue={settingsQuery.data?.expire_after_days || 7} required />

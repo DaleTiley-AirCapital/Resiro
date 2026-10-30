@@ -45,7 +45,8 @@ public class SupplierController : ControllerBase
         var state = await Read();
         return Ok(state["supplier_profile"] ?? new JsonObject {
             ["company_name"] = (await db.Organizations.FindAsync(OrgId))!.Name,
-            ["email"] = User.FindFirst("email")?.Value ?? "", ["specialties"] = new JsonArray() });
+            ["email"] = User.FindFirst("email")?.Value ?? "", ["specialties"] = new JsonArray(),
+            ["accept_bookings"] = OrgId == Guid.Parse("00000000-0000-0000-0000-000000000004") });
     }
     [HttpPut("profile"), RequestSizeLimit(65536)]
     public Task<IActionResult> SaveProfile(JsonObject input) => Change(state => {
@@ -54,6 +55,9 @@ public class SupplierController : ControllerBase
         foreach (var key in new[] { "company_name", "registration_number", "description", "email", "phone", "website" })
             profile[key] = Text(input, key);
         profile["specialties"] = new JsonArray(Text(input, "specialties").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => (JsonNode?)JsonValue.Create(x)).ToArray());
+        profile["accept_bookings"] = input.ContainsKey("accept_bookings")
+            ? new[] { "true", "on" }.Contains(input["accept_bookings"]?.ToString().ToLowerInvariant())
+            : state["supplier_profile"]?["accept_bookings"]?.GetValue<bool>() ?? OrgId == Guid.Parse("00000000-0000-0000-0000-000000000004");
         state["supplier_profile"] = profile;
         return Ok(profile.DeepClone());
     });

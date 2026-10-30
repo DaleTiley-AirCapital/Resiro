@@ -113,7 +113,6 @@ public class FilesController : ControllerBase
         if (!await db.Properties.AnyAsync(p => p.Id == id && p.OrgId == OrgId)) return NotFound();
         return Content("null", "application/json");
     }
-    [HttpGet("api/properties/{id:guid}/reminders")]
     [HttpGet("api/properties/{id:guid}/vendors")]
     public async Task<IActionResult> Related(Guid id)
     {

@@ -67,6 +67,9 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddHttpClient<AiAnalysisService>(client => client.Timeout = TimeSpan.FromSeconds(125));
+builder.Services.AddHostedService<ReminderWorker>();
+
 var app = builder.Build();
 
 var ensureDatabaseCreated =
