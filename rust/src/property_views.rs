@@ -1,23 +1,24 @@
 pub async fn property_page(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,Query(q):Query<PageQuery>)->Result<Response>{
  let user=match browser(&app,&headers).await{Ok(u)=>u,Err(r)=>return Ok(r)};let p=property(&app,&user,id).await?;
  let tab=q.tab.as_deref().unwrap_or("overview");
- let docs:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(d)-'extracted_text'-'object_key'-'bucket' || jsonb_build_object('copies',(SELECT count(*) FROM resiro.document_sources s WHERE s.document_id=d.id)) FROM resiro.documents d WHERE property_id=$1 AND org_id=$2 ORDER BY category,title")
+ let docs:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(d)-'extracted_text'-'object_key'-'bucket'-'extraction' || jsonb_build_object('copies',(SELECT count(*) FROM resiro.document_sources s WHERE s.document_id=d.id)) FROM resiro.documents d WHERE property_id=$1 AND org_id=$2 ORDER BY category,title")
   .bind(id).bind(user.org_id).fetch_all(&app.db).await?;
- let facts:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(f)||jsonb_build_object('source_name',d.name) FROM resiro.facts f JOIN resiro.documents d ON d.id=f.document_id WHERE f.property_id=$1 AND f.org_id=$2 AND f.review_status<>'rejected' ORDER BY fact_key,f.created_at DESC LIMIT 2000")
+ let facts:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(f)||jsonb_build_object('source_name',d.name) FROM resiro.facts f JOIN resiro.documents d ON d.id=f.document_id WHERE f.property_id=$1 AND f.org_id=$2 AND f.review_status<>'rejected' ORDER BY CASE WHEN fact_key LIKE 'property.%' THEN 0 ELSE 1 END,fact_key,f.created_at DESC LIMIT 2000")
   .bind(id).bind(user.org_id).fetch_all(&app.db).await?;
+ let fact_count:i64=sqlx::query_scalar("SELECT count(*) FROM resiro.facts WHERE property_id=$1 AND org_id=$2 AND review_status<>'rejected'").bind(id).bind(user.org_id).fetch_one(&app.db).await?;
  let total=docs.len();let processed=docs.iter().filter(|d|d["status"]=="processed"||d["status"]=="needs_review").count();
  let queued=docs.iter().filter(|d|["queued","reading","analyzing","ai_pending"].contains(&d["status"].as_str().unwrap_or(""))).count();
  let mut navigation=String::new();
  for (key,label) in [("overview","Overview"),("documents","Documents"),("plans","Plans & certificates"),("finance","Finance"),("insurance","Insurance"),("maintenance","Maintenance"),("assets","Assets & contents"),("contacts","Contacts"),("timeline","Timeline"),("assistant","Ask your property")]{
   navigation.push_str(&format!("<a class=\"{}\" href=\"/properties/{id}?tab={key}\">{label}</a>",if key==tab{"selected"}else{""}));
  }
- let stats=format!("<div class=stats><div><strong>{total}</strong><span>Documents</span></div><div><strong>{processed}</strong><span>Processed</span></div><div><strong>{queued}</strong><span>In progress</span></div><div><strong>{}</strong><span>Extracted facts</span></div></div>",facts.len());
+ let stats=format!("<div class=stats><div><strong>{total}</strong><span>Documents</span></div><div><strong>{processed}</strong><span>Processed</span></div><div><strong>{queued}</strong><span>In progress</span></div><div><strong>{}</strong><span>Extracted facts</span></div></div>",fact_count);
  let content=match tab{
   "documents"=>documents_section(&app,&user,id,&docs,&q).await?,
   "plans"=>format!("<div class=card><h2>Plans, certificates &amp; evidence</h2><p>These checks show what has been located in this property file, not a legal or engineering compliance decision.</p>{}</div>{}",coverage(&docs,queued),document_table(&docs.iter().filter(|d|["Plans & Approvals","Ownership & Legal"].contains(&d["category"].as_str().unwrap_or(""))).cloned().collect::<Vec<_>>())),
   "finance"=>format!("<div class=card><h2>Finance &amp; ownership</h2><p>Your private bond, legal and financial record.</p>{}</div>{}",fact_table(&facts.iter().filter(|f|v(f,"fact_key").starts_with("finance.")||v(f,"fact_key").contains("ownership")).cloned().collect::<Vec<_>>(),&user),document_table(&docs.iter().filter(|d|["Finance & Bond","Ownership & Legal","Construction & Quotes"].contains(&d["category"].as_str().unwrap_or(""))).cloned().collect::<Vec<_>>())),
   "insurance"=>format!("<div class=card><h2>Insurance file</h2><p>Policies, warranties, proof of purchase and the evidence behind your contents list. Candidate assets are not confirmed purchases.</p>{}</div>{}",coverage(&docs,queued),document_table(&docs.iter().filter(|d|["Insurance","Furniture & Contents"].contains(&d["category"].as_str().unwrap_or(""))).cloned().collect::<Vec<_>>())),
-  "maintenance"=>crate::workflows::property_section(&app,&user,id).await?,
+  "maintenance"=>format!("{}<h2>Maintenance documents</h2>{}",crate::workflows::property_section(&app,&user,id).await?,document_table(&docs.iter().filter(|d|d["category"]=="Maintenance").cloned().collect::<Vec<_>>())),
   "assets"=>assets_section(&app,&user,id).await?,
   "contacts"=>format!("<div class=card><h2>People &amp; companies</h2><p>Contact details extracted from your documents. Check them against the original before relying on them.</p>{}</div>",fact_table(&facts.iter().filter(|f|["contact","supplier","vendor","email","phone","contractor","architect"].iter().any(|t|v(f,"fact_key").contains(t))).cloned().collect::<Vec<_>>(),&user)),
   "timeline"=>timeline(&app,&user,id).await?,

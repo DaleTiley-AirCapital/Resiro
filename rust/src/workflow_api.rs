@@ -14,42 +14,42 @@ pub async fn supplier_json(State(app):State<App>,headers:HeaderMap)->Result<axum
 
 pub async fn add_reminder_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,axum::Json(mut data):axum::Json<HashMap<String,String>>)->Result<axum::Json<Value>>{
  let user=auth::user(&app,&headers).await?;auth::api_csrf(&app,&user,&headers,data.get("csrf").map(String::as_str))?;
- data.insert("csrf".into(),user.csrf);add_reminder(State(app),headers,Path(id),Form(data)).await?;
+ data.insert("csrf".into(),user.csrf);let _ = add_reminder(State(app),headers,Path(id),Form(data)).await?;
  Ok(axum::Json(json!({"saved":true})))
 }
 
 pub async fn reminder_action_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,axum::Json(mut data):axum::Json<HashMap<String,String>>)->Result<axum::Json<Value>>{
  let user=auth::user(&app,&headers).await?;auth::api_csrf(&app,&user,&headers,data.get("csrf").map(String::as_str))?;
- data.insert("csrf".into(),user.csrf);reminder_action(State(app),headers,Path(id),Form(data)).await?;
+ data.insert("csrf".into(),user.csrf);let _ = reminder_action(State(app),headers,Path(id),Form(data)).await?;
  Ok(axum::Json(json!({"saved":true})))
 }
 
 pub async fn add_booking_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,axum::Json(mut data):axum::Json<HashMap<String,String>>)->Result<axum::Json<Value>>{
  let user=auth::user(&app,&headers).await?;auth::api_csrf(&app,&user,&headers,data.get("csrf").map(String::as_str))?;
- data.insert("csrf".into(),user.csrf);add_booking(State(app),headers,Path(id),Form(data)).await?;
+ data.insert("csrf".into(),user.csrf);let _ = add_booking(State(app),headers,Path(id),Form(data)).await?;
  Ok(axum::Json(json!({"saved":true})))
 }
 
 pub async fn booking_action_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,axum::Json(mut data):axum::Json<HashMap<String,String>>)->Result<axum::Json<Value>>{
  let user=auth::user(&app,&headers).await?;auth::api_csrf(&app,&user,&headers,data.get("csrf").map(String::as_str))?;
- data.insert("csrf".into(),user.csrf);booking_action(State(app),headers,Path(id),Form(data)).await?;
+ data.insert("csrf".into(),user.csrf);let _ = booking_action(State(app),headers,Path(id),Form(data)).await?;
  Ok(axum::Json(json!({"saved":true})))
 }
 
 pub async fn read_notice_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,axum::Json(mut data):axum::Json<HashMap<String,String>>)->Result<axum::Json<Value>>{
  let user=auth::user(&app,&headers).await?;auth::api_csrf(&app,&user,&headers,data.get("csrf").map(String::as_str))?;
- data.insert("csrf".into(),user.csrf);read_notice(State(app),headers,Path(id),Form(data)).await?;
+ data.insert("csrf".into(),user.csrf);let _ = read_notice(State(app),headers,Path(id),Form(data)).await?;
  Ok(axum::Json(json!({"saved":true})))
 }
 
 pub async fn save_profile_json(State(app):State<App>,headers:HeaderMap,axum::Json(mut data):axum::Json<HashMap<String,String>>)->Result<axum::Json<Value>>{
  let user=auth::user(&app,&headers).await?;auth::api_csrf(&app,&user,&headers,data.get("csrf").map(String::as_str))?;
  data.insert("csrf".into(),user.csrf);if data.get("accept_bookings").map(String::as_str)==Some("false"){data.remove("accept_bookings");}
- save_profile(State(app),headers,Form(data)).await?;Ok(axum::Json(json!({"saved":true})))
+ let _ = save_profile(State(app),headers,Form(data)).await?;Ok(axum::Json(json!({"saved":true})))
 }
 
 pub async fn add_job_json(State(app):State<App>,headers:HeaderMap,axum::Json(mut data):axum::Json<HashMap<String,String>>)->Result<axum::Json<Value>>{
  let user=auth::user(&app,&headers).await?;auth::api_csrf(&app,&user,&headers,data.get("csrf").map(String::as_str))?;
  data.insert("csrf".into(),user.csrf);if data.get("accept_bookings").map(String::as_str)==Some("false"){data.remove("accept_bookings");}
- add_job(State(app),headers,Form(data)).await?;Ok(axum::Json(json!({"saved":true})))
+ let _ = add_job(State(app),headers,Form(data)).await?;Ok(axum::Json(json!({"saved":true})))
 }

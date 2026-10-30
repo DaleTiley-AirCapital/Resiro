@@ -160,5 +160,8 @@ async fn process_document(app:&App,doc:&Value)->Result<()>{
  sqlx::query("UPDATE resiro.documents SET status=$1,extraction=extraction||$2,processed_at=now(),claimed_at=NULL,error=NULL WHERE id=$3")
   .bind(if extracted.limitations.is_empty()&&analysis["limitations"].as_array().map_or(true,|v|v.is_empty()){"processed"}else{"needs_review"})
   .bind(json!({"analysis":analysis,"model":app.model})).bind(id).execute(&mut *tx).await?;
+ if let Some(category)=analysis["filing_category"].as_str(){
+  sqlx::query("UPDATE resiro.documents SET category=$1 WHERE id=$2 AND coalesce((extraction->>'filing_reviewed')::boolean,false)=false").bind(category).bind(id).execute(&mut *tx).await?;
+ }
  tx.commit().await?;Ok(())
 }

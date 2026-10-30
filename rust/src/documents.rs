@@ -1,5 +1,5 @@
 use crate::{App,Result,Error,bad,auth,property,missing,storage};
-use axum::{extract::{State,Path,Query,Multipart,Form},http::{HeaderMap,StatusCode,header},response::{IntoResponse,Redirect,Response},Json};
+use axum::{extract::{State,Path,Query,Multipart,Form},http::{HeaderMap,header},response::{IntoResponse,Redirect,Response},Json};
 use serde_json::{Value,json};
 use serde::Deserialize;
 use uuid::Uuid;
@@ -16,6 +16,7 @@ pub fn category(path:&str)->String {
   ("Furniture & Contents",vec!["furniture","dinning","dining","table","bed","desk","firewood rack","golf hitting"]),
   ("Plans & Approvals",vec!["plan","architect","approval","occupancy","certificate","coc","roof design"]),
   ("Fixtures & Finishes",vec!["fireplace","fire place","skirting","deck","kitchen","tiles"]),
+  ("Maintenance",vec!["maintenance","repair invoice","service invoice","pest control"]),
   ("Construction & Quotes",vec!["building cost","construction","quote","additions","material"]),
  ];
  for (category,terms) in rules {if terms.iter().any(|s|p.contains(s)){return category.into();}}
@@ -149,7 +150,7 @@ pub async fn edit_form(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uui
  let user=auth::user(&app,&headers).await?;auth::csrf(&user,input.get("csrf").map(String::as_str).unwrap_or(""))?;
  let title=input.get("title").map(String::as_str).unwrap_or("").trim();let category=input.get("category").map(String::as_str).unwrap_or("Other");
  if title.is_empty()||title.len()>500||category.len()>100{return Err(bad("Choose a valid title and category"));}
- let affected=sqlx::query("UPDATE resiro.documents SET title=$1,category=$2 WHERE id=$3 AND org_id=$4")
+ let affected=sqlx::query("UPDATE resiro.documents SET title=$1,category=$2,extraction=extraction||jsonb_build_object('filing_reviewed',true) WHERE id=$3 AND org_id=$4")
   .bind(title).bind(category).bind(id).bind(user.org_id).execute(&app.db).await?;
  if affected.rows_affected()==0{return Err(missing());}Ok(Redirect::to(&format!("/documents/{id}")))
 }
