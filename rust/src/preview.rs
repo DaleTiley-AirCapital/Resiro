@@ -1,13 +1,19 @@
 use crate::{App, Result, Error, auth, bad, missing, storage};
-use axum::{extract::{Path, State}, http::{HeaderMap, header}, response::{IntoResponse, Response}};
+use axum::{extract::{Path, Query, State}, http::{HeaderMap, header}, response::{IntoResponse, Response}};
 use uuid::Uuid;
 
 static RENDERS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+
+#[derive(serde::Deserialize)]
+pub struct ImageQuery {
+    detail: Option<bool>,
+}
 
 pub async fn page_image(
     State(app): State<App>,
     headers: HeaderMap,
     Path((id, page)): Path<(Uuid, u32)>,
+    Query(query): Query<ImageQuery>,
 ) -> Result<Response> {
     let user = auth::user(&app, &headers).await?;
     let (key, mime, sha): (String, String, String) = sqlx::query_as(
@@ -34,10 +40,11 @@ pub async fn page_image(
     let source = dir.path().join("source.pdf");
     tokio::fs::write(&source, bytes).await.map_err(anyhow::Error::from)?;
     let page = page.to_string();
+    let pixels = if query.detail.unwrap_or(false) { "4400" } else { "2200" };
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(25),
         tokio::process::Command::new("pdftoppm")
-            .args(["-f", &page, "-l", &page, "-scale-to", "2200", "-singlefile", "-png"])
+            .args(["-f", &page, "-l", &page, "-scale-to", pixels, "-singlefile", "-png"])
             .arg(source)
             .arg(dir.path().join("preview"))
             .kill_on_drop(true)

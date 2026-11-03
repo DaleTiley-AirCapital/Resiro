@@ -153,7 +153,7 @@ async fn process_document(app:&App,doc:&Value)->Result<()>{
  if app.ai_key.is_empty(){return Ok(());}
  let analysis=crate::ai::extract_document(app,doc,&extracted.text,&bytes).await?;
  let mut tx=app.db.begin().await?;
- sqlx::query("DELETE FROM resiro.facts WHERE document_id=$1 AND review_status='unreviewed'").bind(id).execute(&mut *tx).await?;
+ sqlx::query("DELETE FROM resiro.facts WHERE document_id=$1 AND review_status='unreviewed' AND confidence<>'drawing_transcription'").bind(id).execute(&mut *tx).await?;
  for fact in analysis["facts"].as_array().into_iter().flatten(){
   let key=fact["key"].as_str().unwrap_or("other");let quote=fact["quote"].as_str().unwrap_or("");
   let normalized=crate::ai::normalize(&extracted.text);let verified=!quote.is_empty()&&normalized.to_lowercase().contains(&crate::ai::normalize(quote).to_lowercase());

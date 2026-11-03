@@ -33,6 +33,13 @@ pub fn mime(name:&str)->&'static str{
  }
 }
 pub async fn store_one(app:&App,user:&auth::User,pid:Uuid,name:&str,bytes:Vec<u8>,root:&str,path:&str,parent:Option<Uuid>,modified:&str,source_hash:&str)->Result<(Uuid,bool)>{
+ store_filed(app,user,pid,name,bytes,root,path,parent,modified,source_hash,None).await
+}
+
+async fn store_filed(
+ app:&App,user:&auth::User,pid:Uuid,name:&str,bytes:Vec<u8>,root:&str,path:&str,
+ parent:Option<Uuid>,modified:&str,source_hash:&str,evidence:Option<&crate::evidence::Evidence>
+)->Result<(Uuid,bool)>{
  property(app,user,pid).await?;
  if storage::excluded(name){return Err(bad("CAD/design source files are excluded from this property vault"));}
  if bytes.is_empty()||bytes.len()>100*1024*1024{return Err(bad("Files must contain data and be smaller than 100 MB"));}
@@ -42,16 +49,27 @@ pub async fn store_one(app:&App,user:&auth::User,pid:Uuid,name:&str,bytes:Vec<u8
  let exists:Option<Uuid>=sqlx::query_scalar("SELECT id FROM resiro.documents WHERE property_id=$1 AND org_id=$2 AND sha256=$3")
   .bind(pid).bind(user.org_id).bind(&hash).fetch_optional(&mut *tx).await?;
  let id=exists.unwrap_or_else(Uuid::new_v4);
+ let category = evidence.map(|section| section.category.to_string()).unwrap_or_else(|| category(&format!("{root}/{path}/{name}")));
  if exists.is_none(){
   let key=format!("{}/{}/{hash}",user.org_id,pid);let size=bytes.len() as i64;
   app.store.put(&app.http,&key,bytes).await?;
-  sqlx::query("INSERT INTO resiro.documents(id,property_id,org_id,name,title,category,sha256,bytes,mime,bucket,object_key) VALUES($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10)")
-   .bind(id).bind(pid).bind(user.org_id).bind(name).bind(category(&format!("{root}/{path}/{name}"))).bind(&hash).bind(size)
-   .bind(mime(name)).bind(app.store.bucket.name()).bind(key).execute(&mut *tx).await?;
+  sqlx::query("INSERT INTO resiro.documents(id,property_id,org_id,name,title,category,sha256,bytes,mime,bucket,object_key,evidence_type) VALUES($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10,$11)")
+   .bind(id).bind(pid).bind(user.org_id).bind(name).bind(&category).bind(&hash).bind(size)
+   .bind(mime(name)).bind(app.store.bucket.name()).bind(key).bind(evidence.map(|section| section.key)).execute(&mut *tx).await?;
+ } else if let Some(section) = evidence {
+  let analyze_drawing = matches!(section.key, "approved-plans" | "final-plans");
+  sqlx::query(
+   "UPDATE resiro.documents SET evidence_type=$1, category=$2,
+    status=CASE WHEN $5 AND evidence_type IS DISTINCT FROM $1 AND status IN ('processed','needs_review','failed','ai_pending') THEN 'queued' ELSE status END,
+    attempts=CASE WHEN $5 AND evidence_type IS DISTINCT FROM $1 AND status IN ('processed','needs_review','failed','ai_pending') THEN 0 ELSE attempts END,
+    next_attempt_at=CASE WHEN $5 AND evidence_type IS DISTINCT FROM $1 AND status IN ('processed','needs_review','failed','ai_pending') THEN now() ELSE next_attempt_at END
+    WHERE id=$3 AND org_id=$4"
+  ).bind(section.key).bind(section.category).bind(id).bind(user.org_id).bind(analyze_drawing)
+   .execute(&mut *tx).await?;
  }
  sqlx::query("INSERT INTO resiro.document_sources(id,document_id,source_root,source_path,parent_id,modified_at,source_sha256) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(document_id,source_root,source_path) DO NOTHING")
   .bind(Uuid::new_v4()).bind(id).bind(root).bind(path).bind(parent).bind(modified).bind(source_hash).execute(&mut *tx).await?;
- tx.commit().await?;if exists.is_none(){crate::event(app,user,Some(pid),"document","Document uploaded",json!({"document_id":id,"name":name,"category":category(&format!("{root}/{path}/{name}"))})).await?;}Ok((id,exists.is_some()))
+ tx.commit().await?;if exists.is_none(){crate::event(app,user,Some(pid),"document","Document uploaded",json!({"document_id":id,"name":name,"category":category})).await?;}Ok((id,exists.is_some()))
 }
 pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multipart)->Result<Response>{
  let user=auth::user(&app,&headers).await?;
@@ -67,7 +85,6 @@ pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multip
  auth::api_csrf(&app,&user,&headers,fields.get("csrf").map(String::as_str))?;
  let pid:Uuid=fields.get("property_id").ok_or_else(||bad("Property required"))?.parse().map_err(|_|bad("Invalid property"))?;
  property(&app,&user,pid).await?;
- const REDIRECT_FIELD: &str = "redirect";
  let evidence = fields.get("evidence_type").map(|key| crate::evidence::find(key).ok_or_else(|| bad("Unknown evidence section"))).transpose()?;
  if evidence.is_some() && files.iter().any(|(name, _)| matches!(mime(name), "application/zip" | "application/vnd.ms-outlook")) {
   return Err(bad("Select individual documents for this evidence section"));
@@ -100,15 +117,11 @@ pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multip
     results.push(json!({"id":id,"duplicate":duplicate,"sanitized":true,"excluded_attachments":excluded,"source_sha256":original_hash}));continue;
    }
   }
-  let (id,duplicate)=store_one(&app,&user,pid,&name,bytes,root,path,None,modified,&original_hash).await?;
-  if let Some(section) = evidence {
-   sqlx::query("UPDATE resiro.documents SET evidence_type=$1,category=$2 WHERE id=$3 AND org_id=$4")
-    .bind(section.key).bind(section.category).bind(id).bind(user.org_id).execute(&app.db).await?;
-  }
+  let (id,duplicate)=store_filed(&app,&user,pid,&name,bytes,root,path,None,modified,&original_hash,evidence).await?;
   results.push(json!({"id":id,"duplicate":duplicate,"source_sha256":original_hash}));
  }
  if results.is_empty(){return Err(bad("Choose at least one document"));}
- if fields.contains_key(REDIRECT_FIELD) {
+ if fields.contains_key("redirect") {
   let target = evidence.map_or_else(|| format!("/properties/{pid}?tab=documents"),
    |section| format!("/properties/{pid}/evidence/{}", section.key));
   Ok(Redirect::to(&target).into_response())

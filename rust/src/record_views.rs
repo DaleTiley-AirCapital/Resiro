@@ -23,17 +23,28 @@ pub async fn document_page(State(app):State<App>,headers:HeaderMap,Path(id):Path
  let facts:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(f)||jsonb_build_object('source_name',$2::text) FROM resiro.facts f WHERE document_id=$1 AND org_id=$3 ORDER BY fact_key").bind(id).bind(v(&doc,"name")).bind(user.org_id).fetch_all(&app.db).await?;
  let origins=sources.iter().map(|s|format!("<li>{} / {}<small>Original modified: {} · Source checksum: {}</small></li>",e(&v(s,"source_root")),e(&v(s,"source_path")),e(&v(s,"modified_at")),e(&v(s,"source_sha256")))).collect::<String>();
  let summary=v(&doc["extraction"]["analysis"],"summary");let limitations=doc["extraction"]["limitations"].as_array().cloned().unwrap_or_default();
- let page = query.page.unwrap_or(1).clamp(1, 10000);
  let mime = v(&doc, "mime");
  let preview_id = doc["extraction"]["readable_copy_id"].as_str()
      .and_then(|value| value.parse::<Uuid>().ok()).unwrap_or(id);
+ let pdf_pages = if mime == "application/pdf" && preview_id != id {
+     let count: Option<i32> = sqlx::query_scalar(
+         "SELECT length(extracted_text)-length(replace(extracted_text, chr(12), '')) FROM resiro.documents WHERE id=$1 AND org_id=$2"
+     ).bind(preview_id).bind(user.org_id).fetch_optional(&app.db).await?;
+     count.unwrap_or(0).max(0) as u32
+ } else {
+     doc["extracted_text"].as_str().unwrap_or("").matches('\x0c').count() as u32
+ };
+ let last_page = if mime != "application/pdf" { 1 } else if pdf_pages > 0 { pdf_pages } else { 10000 };
+ let page = query.page.unwrap_or(1).clamp(1, last_page);
  let preview = if (doc["status"] != "locked" || preview_id != id)
      && matches!(mime.as_str(), "application/pdf" | "image/png" | "image/jpeg") {
      let navigation = if mime == "application/pdf" {
-         format!("<nav class=preview-nav>{}<span>Page {page}</span><a href=\"?page={}#preview\">Next page →</a><form action=\"/documents/{id}#preview\"><label>Page number<input type=number name=page min=1 max=10000 value={page}></label><button class=quiet>Go</button></form></nav>",
-             if page > 1 { format!("<a href=\"?page={}#preview\">← Previous page</a>", page - 1) } else { String::new() }, page + 1)
+         let previous = if page > 1 { format!("<a href=\"?page={}#preview\">← Previous page</a>", page - 1) } else { String::new() };
+         let next = if page < last_page { format!("<a href=\"?page={}#preview\">Next page →</a>", page + 1) } else { String::new() };
+         let position = if pdf_pages > 0 { format!("Page {page} of {pdf_pages}") } else { format!("Page {page}") };
+         format!("<nav class=preview-nav>{previous}<span>{position}</span>{next}<form action=\"/documents/{id}#preview\"><label>Page number<input type=number name=page min=1 max={last_page} value={page}></label><button class=quiet>Go</button></form></nav>")
      } else { String::new() };
-     format!("{navigation}<a href=/documents/{preview_id}/preview/{page}><img class=document-image src=/documents/{preview_id}/preview/{page} alt=\"Document page {page}. Try a different page number if it is unavailable.\"></a><p class=muted>Open the image to zoom in.</p>")
+     format!("{navigation}<a href=\"/documents/{preview_id}/preview/{page}?detail=true\" title=\"Open larger preview\"><img class=document-image src=/documents/{preview_id}/preview/{page} alt=\"Document page {page}. Try a different page number if it is unavailable.\"></a><p class=muted><a href=\"/documents/{preview_id}/preview/{page}?detail=true\">Open larger preview</a></p>")
  } else if doc["status"] == "locked" {
      "<p>Unlock this PDF below to preview it.</p>".into()
  } else {
