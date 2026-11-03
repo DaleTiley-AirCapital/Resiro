@@ -1,6 +1,8 @@
 mod auth;
 mod storage;
 mod documents;
+mod evidence;
+mod preview;
 mod worker;
 mod ai;
 mod pages;
@@ -83,6 +85,8 @@ async fn main()->anyhow::Result<()>{
   .route("/api/house/manifest",post(documents::save_manifest))
   .route("/api/documents",post(documents::upload))
   .route("/documents/{id}",get(pages::document_page).post(documents::edit_form))
+  .route("/documents/{id}/preview/{page}",get(preview::page_image))
+  .route("/properties/{id}/evidence/{kind}",get(pages::evidence_page))
   .route("/documents/{id}/download",get(documents::download))
   .route("/documents/{id}/retry",post(documents::retry))
   .route("/documents/{id}/unlock",post(documents::unlock_form))

@@ -67,6 +67,11 @@ pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multip
  auth::api_csrf(&app,&user,&headers,fields.get("csrf").map(String::as_str))?;
  let pid:Uuid=fields.get("property_id").ok_or_else(||bad("Property required"))?.parse().map_err(|_|bad("Invalid property"))?;
  property(&app,&user,pid).await?;
+ const REDIRECT_FIELD: &str = "redirect";
+ let evidence = fields.get("evidence_type").map(|key| crate::evidence::find(key).ok_or_else(|| bad("Unknown evidence section"))).transpose()?;
+ if evidence.is_some() && files.iter().any(|(name, _)| matches!(mime(name), "application/zip" | "application/vnd.ms-outlook")) {
+  return Err(bad("Select individual documents for this evidence section"));
+ }
  let mut results=Vec::new();
  for (name,bytes) in files{
   let original_hash=storage::hash(&bytes);
@@ -96,10 +101,18 @@ pub async fn upload(State(app):State<App>,headers:HeaderMap,mut multipart:Multip
    }
   }
   let (id,duplicate)=store_one(&app,&user,pid,&name,bytes,root,path,None,modified,&original_hash).await?;
+  if let Some(section) = evidence {
+   sqlx::query("UPDATE resiro.documents SET evidence_type=$1,category=$2 WHERE id=$3 AND org_id=$4")
+    .bind(section.key).bind(section.category).bind(id).bind(user.org_id).execute(&app.db).await?;
+  }
   results.push(json!({"id":id,"duplicate":duplicate,"source_sha256":original_hash}));
  }
  if results.is_empty(){return Err(bad("Choose at least one document"));}
- if fields.get("redirect").is_some(){Ok(Redirect::to(&format!("/properties/{pid}?tab=documents")).into_response())}else{Ok(Json(json!({"documents":results})).into_response())}
+ if fields.contains_key(REDIRECT_FIELD) {
+  let target = evidence.map_or_else(|| format!("/properties/{pid}?tab=documents"),
+   |section| format!("/properties/{pid}/evidence/{}", section.key));
+  Ok(Redirect::to(&target).into_response())
+ } else{Ok(Json(json!({"documents":results})).into_response())}
 }
 pub async fn list(State(app):State<App>,headers:HeaderMap,Path(pid):Path<Uuid>)->Result<Json<Value>>{
  let user=auth::user(&app,&headers).await?;property(&app,&user,pid).await?;

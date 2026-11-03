@@ -13,18 +13,40 @@ pub async fn properties_json(State(app):State<App>,headers:HeaderMap)->Result<Js
  let rows:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(p) FROM resiro.properties p WHERE org_id=$1").bind(user.org_id).fetch_all(&app.db).await?;Ok(Json(json!(rows)))
 }
 pub async fn property_json(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>)->Result<Json<Value>>{let user=auth::user(&app,&headers).await?;Ok(Json(property(&app,&user,id).await?))}
-pub async fn document_page(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>)->Result<Response>{
+#[derive(Deserialize, Default)]
+pub struct PreviewQuery { page: Option<u32> }
+
+pub async fn document_page(State(app):State<App>,headers:HeaderMap,Path(id):Path<Uuid>,Query(query):Query<PreviewQuery>)->Result<Response>{
  let user=match browser(&app,&headers).await{Ok(u)=>u,Err(r)=>return Ok(r)};
  let doc:Value=sqlx::query_scalar("SELECT to_jsonb(d) FROM resiro.documents d WHERE id=$1 AND org_id=$2").bind(id).bind(user.org_id).fetch_optional(&app.db).await?.ok_or_else(missing)?;
  let sources:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(s) FROM resiro.document_sources s WHERE document_id=$1").bind(id).fetch_all(&app.db).await?;
  let facts:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(f)||jsonb_build_object('source_name',$2::text) FROM resiro.facts f WHERE document_id=$1 AND org_id=$3 ORDER BY fact_key").bind(id).bind(v(&doc,"name")).bind(user.org_id).fetch_all(&app.db).await?;
  let origins=sources.iter().map(|s|format!("<li>{} / {}<small>Original modified: {} · Source checksum: {}</small></li>",e(&v(s,"source_root")),e(&v(s,"source_path")),e(&v(s,"modified_at")),e(&v(s,"source_sha256")))).collect::<String>();
  let summary=v(&doc["extraction"]["analysis"],"summary");let limitations=doc["extraction"]["limitations"].as_array().cloned().unwrap_or_default();
- let mut body=format!("<p><a href=\"/properties/{}?tab=documents\">← Property documents</a></p><section class=hero><div><div class=eyebrow>DOCUMENT RECORD</div><h1>{}</h1><p>{}</p></div><a class=button href=/documents/{id}/download>Download original</a></section><div class=card>{}<p>{}</p><details><summary>Original file integrity</summary><p class=muted>{} bytes · SHA-256 {}</p></details>{}<ul>{}</ul></div><div class=card><h2>Document summary</h2><p>{}</p><p class=muted>Extracted values are drafts until reviewed.</p></div><details class=card><summary>File name, category and original locations</summary><form method=post action=/documents/{id}>{}{}{}<button>Save filing</button></form><ul>{origins}</ul></details><details class=card><summary>Extracted facts ({})</summary>{}</details><details class=card><summary>Full extracted text</summary><pre>{}</pre></details><form method=post action=/documents/{id}/retry>{}<button class=quiet>Retry document processing</button></form>",
-  v(&doc,"property_id"),e(&v(&doc,"title")),e(&v(&doc,"category")),badge(&v(&doc,"status")),e(&v(&doc,"error")),v(&doc,"bytes"),v(&doc,"sha256"),
+ let page = query.page.unwrap_or(1).clamp(1, 10000);
+ let mime = v(&doc, "mime");
+ let preview_id = doc["extraction"]["readable_copy_id"].as_str()
+     .and_then(|value| value.parse::<Uuid>().ok()).unwrap_or(id);
+ let preview = if (doc["status"] != "locked" || preview_id != id)
+     && matches!(mime.as_str(), "application/pdf" | "image/png" | "image/jpeg") {
+     let navigation = if mime == "application/pdf" {
+         format!("<nav class=preview-nav>{}<span>Page {page}</span><a href=\"?page={}#preview\">Next page →</a><form action=\"/documents/{id}#preview\"><label>Page number<input type=number name=page min=1 max=10000 value={page}></label><button class=quiet>Go</button></form></nav>",
+             if page > 1 { format!("<a href=\"?page={}#preview\">← Previous page</a>", page - 1) } else { String::new() }, page + 1)
+     } else { String::new() };
+     format!("{navigation}<a href=/documents/{preview_id}/preview/{page}><img class=document-image src=/documents/{preview_id}/preview/{page} alt=\"Document page {page}. Try a different page number if it is unavailable.\"></a><p class=muted>Open the image to zoom in.</p>")
+ } else if doc["status"] == "locked" {
+     "<p>Unlock this PDF below to preview it.</p>".into()
+ } else {
+     let text = v(&doc, "extracted_text");
+     if text.trim().is_empty() { "<p>A preview is unavailable for this file.</p>".into() }
+     else { format!("<p>Text preview</p><pre>{}</pre>", e(&text.chars().take(16000).collect::<String>())) }
+ };
+ let summary = if summary.is_empty() { "A summary is not available yet.".into() } else { summary };
+ let mut body=format!("<p><a href=\"/properties/{}?tab=documents\">← Property documents</a></p><section class=hero><div><div class=eyebrow>DOCUMENT RECORD</div><h1>{}</h1><p>{}</p></div></section><section class=card><h2>Document summary</h2><p>{}</p><p class=muted>Extracted values are drafts until reviewed.</p></section><section class=card id=preview><h2>Document preview</h2>{preview}</section><section class=card>{}<p>{}</p><a href=/documents/{id}/download>Download original</a><details><summary>Original file integrity</summary><p class=muted>{} bytes · SHA-256 {}</p></details>{}<ul>{}</ul></section><details class=card><summary>File name, category and original locations</summary><form method=post action=/documents/{id}>{}{}{}<button>Save filing</button></form><ul>{origins}</ul></details><details class=card><summary>Extracted facts ({})</summary>{}</details><details class=card><summary>Full extracted text</summary><pre>{}</pre></details><form method=post action=/documents/{id}/retry>{}<button class=quiet>Retry document processing</button></form>",
+  v(&doc,"property_id"),e(&v(&doc,"title")),e(&v(&doc,"category")),e(&summary),badge(&v(&doc,"status")),e(&v(&doc,"error")),v(&doc,"bytes"),v(&doc,"sha256"),
   if doc["extraction"]["checksum_verified"]==true{"<p>Stored original checksum verified.</p>"}else{""},
   limitations.iter().map(|s|format!("<li>{}</li>",e(s.as_str().unwrap_or("")))).collect::<String>(),
-  e(&summary),csrf(&user),input("title","Document title",&v(&doc,"title"),"text"),input("category","Filed under",&v(&doc,"category"),"text"),facts.len(),fact_table(&facts,&user),e(&v(&doc,"extracted_text")),csrf(&user));
+  csrf(&user),input("title","Document title",&v(&doc,"title"),"text"),input("category","Filed under",&v(&doc,"category"),"text"),facts.len(),fact_table(&facts,&user),e(&v(&doc,"extracted_text")),csrf(&user));
  if doc["mime"]=="application/pdf"&&["locked","failed"].contains(&v(&doc,"status").as_str()){
   body.push_str(&format!("<section class=card><h2>Unlock protected PDF</h2><p>Your encrypted original stays in the vault. The password is used only to create a private readable copy and is not saved.</p><form method=post action=/documents/{id}/unlock>{}<label>Document password<input type=password name=password autocomplete=off required maxlength=256></label><button>Unlock privately</button></form></section>",csrf(&user)));
  }
