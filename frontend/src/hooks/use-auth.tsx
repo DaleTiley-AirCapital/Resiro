@@ -1,3 +1,4 @@
+import { queryClient } from '@/lib/queryClient';
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 
@@ -67,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await api.post('/api/auth/login', { email, password });
       const { token, user: userData, organization: orgData } = response.data;
+      queryClient.clear();
       
       localStorage.setItem('auth_token', token);
       api.setToken(token);
@@ -79,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    queryClient.clear();
     localStorage.removeItem('auth_token');
     api.setToken(null);
     setUser(null);

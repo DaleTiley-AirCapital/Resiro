@@ -31,7 +31,7 @@ public class RezDNADbContext : DbContext
         modelBuilder.Entity<User>()
             .Property(e => e.UserType)
             .HasConversion(
-                v => v.ToString().ToLowerInvariant().Replace("", "_"),
+                v => v.ToString().ToLowerInvariant(),
                 v => Enum.Parse<UserType>(v.Replace("_", ""), true));
 
         modelBuilder.Entity<Property>()
@@ -49,7 +49,7 @@ public class RezDNADbContext : DbContext
         modelBuilder.Entity<Document>()
             .Property(e => e.Source)
             .HasConversion(
-                v => v.HasValue ? v.Value.ToString().ToLowerInvariant().Replace("", "_") : null,
+                v => v.HasValue ? v.Value.ToString().ToLowerInvariant() : null,
                 v => !string.IsNullOrEmpty(v) ? Enum.Parse<DocumentSource>(v.Replace("_", ""), true) : null);
 
         modelBuilder.Entity<AuditLog>()
