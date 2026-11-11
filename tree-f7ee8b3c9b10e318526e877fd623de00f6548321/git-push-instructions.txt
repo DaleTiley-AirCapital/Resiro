@@ -1,0 +1,34 @@
+MANUAL GIT PUSH INSTRUCTIONS FOR REZDNA-1
+==========================================
+
+Since Replit has Git restrictions, please follow these steps manually:
+
+1. CREATE GITHUB REPOSITORY:
+   - Go to https://github.com/new
+   - Name: RezDNA-1
+   - Description: RezDNA Platform - Migrated to Microsoft .NET Stack
+   - Public repository
+   - Do NOT initialize with README
+
+2. OPEN TERMINAL AND RUN:
+   git remote add origin https://github.com/YOUR_USERNAME/RezDNA-1.git
+   git add .
+   git commit -m "Initial commit: Migrate RezDNA to .NET stack
+
+   - Migrated from Node.js/Express to ASP.NET Core Web API
+   - Converted Drizzle ORM to Entity Framework Core  
+   - Preserved React frontend with updated configuration
+   - Added Visual Studio 2022 solution structure
+   - Maintained all existing functionality and demo accounts"
+   
+   git push -u origin main
+
+3. YOUR REPOSITORY WILL CONTAIN:
+   ✅ Complete ASP.NET Core Web API backend
+   ✅ Entity Framework Core models and migrations
+   ✅ React frontend in separate folder
+   ✅ Visual Studio 2022 solution file
+   ✅ Setup scripts and documentation
+   ✅ All original functionality preserved
+
+Repository is ready for your C# development team!
