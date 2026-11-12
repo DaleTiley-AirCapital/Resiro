@@ -1,3 +1,4 @@
+import { queryClient } from "@/lib/queryClient";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -50,20 +51,25 @@ export default function PropertyForm() {
     setIsSubmitting(true);
     
     try {
-      // Generate a simple DNA code (in real implementation, this would be server-generated)
-      const dnaCode = `RES-${Math.floor(1000 + Math.random() * 9000)}-CT`;
-      
       const propertyData = {
-        ...data,
-        dnaCode,
-        isDemo: false,
+        ...data, name: data.address, parcelId: data.erfNumber, country: 'ZA'
       };
-
       const response = await api.post('/api/properties', propertyData);
+      for (const file of uploadedFiles) {
+        const body = new FormData();
+        body.append('file', file);
+        body.append('propertyId', response.data.id);
+        const upload = await fetch('/api/files', {
+          method: 'POST', body,
+          headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
+        });
+        if (!upload.ok) throw new Error('Property created, but a document upload failed. Open the property to retry.');
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/properties'] });
       
       toast({
         title: "Property Added Successfully!",
-        description: `Property code ${dnaCode} has been created for your property.`,
+        description: `Property code ${response.data.dnaId} has been created for your property.`,
       });
       
       // Redirect to the new property's dashboard

@@ -10,17 +10,21 @@ public class PropertyService : IPropertyService
 {
     private readonly IRepository<Property> _propertyRepository;
     private readonly IDnaIdGenerator _dnaIdGenerator;
+    private readonly IRepository<Document> _documents;
 
-    public PropertyService(IRepository<Property> propertyRepository, IDnaIdGenerator dnaIdGenerator)
+    public PropertyService(IRepository<Property> propertyRepository, IDnaIdGenerator dnaIdGenerator, IRepository<Document> documents)
     {
         _propertyRepository = propertyRepository;
         _dnaIdGenerator = dnaIdGenerator;
+        _documents = documents;
     }
 
     public async Task<IEnumerable<PropertyDTO>> GetPropertiesByOrgAsync(Guid orgId)
     {
         var properties = await _propertyRepository.FindAsync(p => p.OrgId == orgId);
-        return properties.Select(MapToDTO);
+        var counts = (await _documents.FindAsync(d => d.OrgId == orgId && d.PropertyId != null))
+            .GroupBy(d => d.PropertyId!.Value).ToDictionary(g => g.Key, g => g.Count());
+        return properties.Select(p => { var dto = MapToDTO(p); dto.DocumentsCount = counts.GetValueOrDefault(p.Id); return dto; });
     }
 
     public async Task<PropertyDTO?> GetPropertyAsync(Guid id, Guid orgId)
@@ -70,6 +74,9 @@ public class PropertyService : IPropertyService
         {
             Id = property.Id,
             DnaId = property.DnaId,
+            ErfNumber = property.ParcelId,
+            Township = property.Township,
+            Municipality = property.Municipality,
             Name = property.Name,
             Description = property.Description,
             PropertyType = property.PropertyType,

@@ -99,13 +99,13 @@ public class AuthService : IAuthService
         // Handle demo accounts
         if (request.Email == "info@millenniumroofing.co.za" && request.Password == "supplier123")
         {
-            return CreateDemoResponse("demo-supplier", "demo-org-supplier", "Millennium", "Roofing", 
+            return await CreateDemoResponseAsync("demo-supplier", "demo-org-supplier", "Millennium", "Roofing", 
                 UserType.Supplier, "Millennium Roofing (Pty) Ltd", "millennium-roofing");
         }
 
         if (request.Email == "dale.tiley@email.com" && request.Password == "demo123")
         {
-            return CreateDemoResponse("demo-property", "demo-org-property", "Dale", "Tiley", 
+            return await CreateDemoResponseAsync("demo-property", "demo-org-property", "Dale", "Tiley", 
                 UserType.Homeowner, "Dale Tiley Properties", "dale-tiley-properties");
         }
 
@@ -204,7 +204,8 @@ public class AuthService : IAuthService
                 new Claim("userId", user.Id.ToString()),
                 new Claim("orgId", user.OrgId.ToString()),
                 new Claim("email", user.Email),
-                new Claim("role", user.Role)
+                new Claim("role", user.Role),
+                new Claim("userType", user.UserType.ToString().ToLowerInvariant())
             }),
             Expires = DateTime.UtcNow.AddDays(7),
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
@@ -225,7 +226,7 @@ public class AuthService : IAuthService
         return BCrypt.Net.BCrypt.HashPassword(password, 10);
     }
 
-    private AuthResponse CreateDemoResponse(string userId, string orgId, string firstName, string lastName, 
+    private async Task<AuthResponse> CreateDemoResponseAsync(string userId, string orgId, string firstName, string lastName, 
         UserType userType, string orgName, string orgSlug)
     {
         var demoUser = new User 
@@ -239,6 +240,24 @@ public class AuthService : IAuthService
             Role = "admin"
         };
 
+        // Demo identities use the same persisted organization and user contracts as real accounts.
+        // This keeps refresh, property creation, and document ownership consistent.
+        var organization = await _organizationRepository.GetByIdAsync(demoUser.OrgId);
+        if (organization == null)
+        {
+            organization = new Organization { Id = demoUser.OrgId, Name = orgName, Slug = orgSlug,
+                BillingEmail = demoUser.Email, Settings = "{\"demo\":true}" };
+            await _organizationRepository.AddAsync(organization);
+            await _organizationRepository.SaveChangesAsync();
+        }
+        var persistedUser = await _userRepository.GetByIdAsync(demoUser.Id);
+        if (persistedUser == null)
+        {
+            demoUser.Username = demoUser.Email;
+            demoUser.Password = HashPassword(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+            await _userRepository.AddAsync(demoUser);
+            await _userRepository.SaveChangesAsync();
+        }
         var token = GenerateJwtToken(demoUser);
 
         return new AuthResponse

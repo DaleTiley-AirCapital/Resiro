@@ -1,3 +1,4 @@
+import ActivityInbox from "@/components/workflows/activity-inbox";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -24,7 +25,7 @@ interface Property {
 
 // Individual User Dashboard - Properties Overview
 function IndividualDashboard() {
-  const { data: properties, isLoading } = useQuery<Property[]>({
+  const { data: properties, isLoading, error } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
     enabled: true,
   });
@@ -32,7 +33,7 @@ function IndividualDashboard() {
   // Demo property for new users
   const demoProperty: Property = {
     id: 'demo',
-    dnaCode: 'RES-DEMO-CT',
+    dnaCode: 'DNA-DEMO-CT',
     address: '123 Example Street, Cape Town',
     erfNumber: 'ERF123',
     township: 'Gardens',
@@ -40,18 +41,19 @@ function IndividualDashboard() {
     isDemo: true,
     documentsCount: 5,
     lastActivity: 'Demo data updated',
-    complianceStatus: 'good'
+    complianceStatus: undefined
   };
 
-  const allProperties = properties || [demoProperty];
+  const allProperties = [demoProperty, ...(properties || [])];
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="text-red-700">Properties could not be loaded. Refresh to retry.</p>}
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Your Property Portfolio</h2>
         <p className="text-gray-600 mb-4">
-          Each property gets a unique DNA code that travels with it forever. Manage your documents, get AI compliance checking, and protect your investment.
+          Each property gets a unique DNA code. Manage your property records and documents in one place.
         </p>
         <div className="flex flex-wrap gap-4">
           <div className="bg-white px-4 py-2 rounded-lg border">
@@ -101,7 +103,7 @@ function IndividualDashboard() {
                   <div className="flex justify-between items-start">
                     <div className="flex items-center space-x-2">
                       <Home className="w-5 h-5 text-primary" />
-                      <CardTitle className="text-lg">{property.dnaCode}</CardTitle>
+                      <CardTitle className="text-lg">{property.dnaCode || (property as any).dnaId}</CardTitle>
                     </div>
                     {property.isDemo && (
                       <Badge variant="outline" className="text-xs">
@@ -197,7 +199,8 @@ function CompanyDashboard() {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
   
   // Determine user type from auth context
   const userType = user?.userType || 'homeowner';
@@ -242,24 +245,27 @@ export default function Dashboard() {
   
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {user?.id === "00000000-0000-0000-0000-000000000001" && <p className="p-3 bg-blue-50 border">Shared demo account. Saved changes are visible to other demo visitors. Use sample documents only.</p>}
       {/* Header with Logo */}
       <div className="bg-white border-b border-gray-200">
         <div className="px-8 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-10">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-10">
               <div className="flex-shrink-0">
                 <Logo size="lg" />
               </div>
-              <div className="border-l border-gray-300 pl-10 ml-2">
+              <div className="sm:border-l border-gray-300 sm:pl-10 sm:ml-2">
                 <h1 className="text-2xl font-semibold text-gray-900">{getTitle()}</h1>
                 <p className="text-gray-600">{getSubtitle()}</p>
               </div>
             </div>
+            <Button variant="outline" onClick={() => { logout(); navigate("/login"); }}>Sign out</Button>
           </div>
         </div>
       </div>
       
       <main className="flex-1 p-8 overflow-auto bg-gray-50">
+        <ActivityInbox />
         {showPropertiesDashboard ? <IndividualDashboard /> : <CompanyDashboard />}
       </main>
     </div>

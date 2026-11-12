@@ -21,6 +21,10 @@ public class CreatePropertyRequest
 
 public class PropertyDTO
 {
+    public int DocumentsCount { get; set; }
+    public string? ErfNumber { get; set; }
+    public string? Township { get; set; }
+    public string? Municipality { get; set; }
     public Guid Id { get; set; }
     public string DnaId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
